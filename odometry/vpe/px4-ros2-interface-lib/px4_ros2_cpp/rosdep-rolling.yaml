@@ -1,3 +1,0 @@
-px4_msgs:
-  ubuntu:
-    - ros-rolling-px4-msgs=3.2.13-0noble

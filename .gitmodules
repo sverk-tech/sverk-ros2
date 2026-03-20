@@ -1,0 +1,24 @@
+[submodule "px4/px4_msgs"]
+	path = px4/px4_msgs
+	url = https://github.com/PX4/px4_msgs.git
+	branch = release/1.15
+[submodule "px4/px4_ros_com"]
+	path = px4/px4_ros_com
+	url = https://github.com/PX4/px4_ros_com.git
+	branch = release/1.15
+[submodule "web/rosboard"]
+	path = web/rosboard
+	url = https://github.com/petayyyy/rosboard.git
+	branch = s1rne/dev
+[submodule "peripheral/camera_ros"]
+	path = peripheral/camera_ros
+	url = https://github.com/petayyyy/camera_ros.git
+	branch = main
+[submodule "px4/Micro-XRCE-DDS-Agent"]
+	path = px4/Micro-XRCE-DDS-Agent
+	url = https://github.com/eProsima/Micro-XRCE-DDS-Agent.git
+	branch = ros2
+[submodule "odometry/vpe/px4-ros2-interface-lib"]
+	path = odometry/vpe/px4-ros2-interface-lib
+	url = https://github.com/petayyyy/px4-ros2-interface-lib.git
+	branch = main

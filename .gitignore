@@ -1,0 +1,17 @@
+# Ignore build artifacts and other unnecessary files from ROS2 packages
+/**/build
+/**/install
+/**/log
+.venv/
+core
+/.vscode
+
+/.idea
+deps.json 
+deps*
+sorted_deps.txt
+.gitlab-ci-local/
+artifacts/
+dynamic-pipeline.yml
+
+*.drawio
