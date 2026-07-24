@@ -1,0 +1,35 @@
+# noVNC — программный рендер Gazebo (Xvfb + llvmpipe), БЕЗ проброса GPU.
+# Работает на ЛЮБОМ ноутбуке (Windows/Linux, любая видеокарта или без неё):
+# картинка считается на CPU и стримится в браузер. Самый надёжный режим —
+# рекомендуется, если не уверены в поддержке GPU.
+#
+# Это ОТДЕЛЬНЫЙ образ (SIM_IMAGE_NOVNC) со своим entrypoint, который
+# поднимает Xvfb + x11vnc + noVNC поверх обычного SITL. Подменяет image
+# из базового файла — build здесь не нужен.
+#
+# Запуск:
+#   docker compose \
+#     -f docker-compose.sim.yml \
+#     -f docker-compose.sim.novnc.yml \
+#     up -d
+#
+# Открыть http://localhost:6080/vnc.html, затем внутри контейнера:
+#   ros2 launch launch_system full_system_sitl.launch.py \
+#     vnc_gui:=true obrik_config:=base gz_world:=obrik_aruco
+services:
+  sitl:
+    image: ${SIM_IMAGE_NOVNC:-ilyawwww/sverk-ros2:v1.9-sim-novnc}
+
+    # x11vnc работает с -nopw (без пароля) — слушаем только localhost.
+    # Для доступа по LAN менять осознанно: любой, кто дотянется до порта,
+    # получит рабочий стол без авторизации.
+    ports:
+      - "127.0.0.1:6080:6080"   # noVNC в браузере — http://localhost:6080/vnc.html
+      - "127.0.0.1:5900:5900"   # сырой VNC — для нативного VNC-клиента
+
+    environment:
+      # Необязательные переопределения (задать в .env или export перед up):
+      #   VNC_RESOLUTION=2560x1440x24
+      #   LP_NUM_THREADS=8   (число потоков софт-рендера; по умолчанию все ядра)
+      - VNC_RESOLUTION=${VNC_RESOLUTION:-1920x1080x24}
+      - LP_NUM_THREADS=${LP_NUM_THREADS:-}

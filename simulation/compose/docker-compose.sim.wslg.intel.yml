@@ -1,0 +1,10 @@
+# WSL2 + WSLg: окружение Intel Arc GPU.
+# Использовать вместе с docker-compose.sim.yml и docker-compose.sim.wslg.yml.
+#
+# ВНИМАНИЕ: на Intel Arc под WSLg проброс GPU (Mesa d3d12) часто падает
+# вместо софт-фолбэка. Если окно Gazebo не появляется — используйте
+# noVNC-вариант (docker-compose.sim.novnc.yml), он работает на любом железе.
+services:
+  sitl:
+    environment:
+      - LD_LIBRARY_PATH=/usr/lib/wsl/lib

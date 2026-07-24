@@ -1,0 +1,27 @@
+# WSL2 + WSLg: базовые бинды для окна Gazebo через WSLg (Windows + WSL2).
+# GPU-специфичные переменные — в .wslg.nvidia.yml / .wslg.intel.yml.
+#
+# Запуск (NVIDIA):
+#   docker compose \
+#     -f docker-compose.sim.yml \
+#     -f docker-compose.sim.wslg.yml \
+#     -f docker-compose.sim.wslg.nvidia.yml \
+#     up -d
+#
+# Внутри контейнера окно Gazebo поднимается флагом wslg_gpu_gui:=true
+# (НЕ wslg_gui — тот течёт 2-5 ГБ/мин, gz-sim#2873):
+#   ros2 launch launch_system full_system_sitl.launch.py \
+#     wslg_gpu_gui:=true obrik_config:=base gz_world:=obrik_aruco
+services:
+  sitl:
+    # Жёсткий потолок памяти — защита от утечки рендера Gazebo Harmonic на
+    # Mesa d3d12 (gz-sim#2873): ogre2 течёт 2-5 ГБ/мин. Без лимита OOM ловит
+    # вся WSL VM; с лимитом OOM-killer убивает только gz, VM выживает.
+    # Легитимный расход стека на llvmpipe ~3.5-5 ГБ — 10g не мешает.
+    mem_limit: 10g
+    memswap_limit: 10g
+    volumes:
+      - /mnt/wslg:/mnt/wslg
+      - /usr/lib/wsl:/usr/lib/wsl:ro
+    devices:
+      - /dev/dxg:/dev/dxg

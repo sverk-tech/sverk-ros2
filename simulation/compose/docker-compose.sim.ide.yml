@@ -1,0 +1,28 @@
+# Web-IDE — code-server (VS Code в браузере) + butterfly (веб-терминал).
+# Даёт среду прямо в браузере: не нужен docker exec / ssh / локальный
+# терминал — код и терминал открываются по HTTP.
+#
+# Это ОТДЕЛЬНЫЙ образ (SIM_IMAGE_IDE) со своим entrypoint. Подменяет image из
+# базового файла — build не нужен.
+#
+# Комбинируется с WSLg / Linux-X11 / headless (они не меняют образ):
+#   docker compose \
+#     -f docker-compose.sim.yml \
+#     -f docker-compose.sim.ide.yml \
+#     up -d                              # headless + IDE
+#
+#   + WSLg-NVIDIA: добавьте -f docker-compose.sim.wslg.yml -f docker-compose.sim.wslg.nvidia.yml
+#
+# НЕ сочетается с noVNC (тот тоже меняет образ/entrypoint). Если нужна и картинка
+# Gazebo, и терминал в браузере без GPU — берите noVNC: в его рабочем столе
+# (:6080) можно открыть терминал прямо в окружении.
+#
+#   code-server → http://localhost:5467
+#   butterfly   → http://localhost:8575
+services:
+  sitl:
+    image: ${SIM_IMAGE_IDE:-ilyawwww/sverk-ros2:v1.9-sim-ide}
+
+    ports:
+      - "5467:5467"         # code-server — VS Code в браузере
+      - "8575:57575"        # butterfly — веб-терминал

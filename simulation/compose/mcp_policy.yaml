@@ -1,0 +1,106 @@
+# ============================================================================
+#  MCP policy — границы дозволенного для sverk_mcp
+# ============================================================================
+#
+# Этот файл — «ограничитель»: он решает, какие ПИШУЩИЕ инструменты MCP может
+# выполнить на дроне и с какими целями. Инструменты чтения (list_*, echo,
+# param_get, interface_show, file_read, ...) не ограничиваются — они всегда
+# доступны.
+#
+# Файл монтируется в контейнер как /policy/mcp_policy.yaml и перечитывается
+# автоматически по mtime — правь на хосте, перезапуск контейнера НЕ нужен.
+# Если файл отсутствует или битый — сервер откатывается в mode: read_only.
+#
+# Проверить, что видит сервер:  curl -s http://localhost:8765/policy
+# ----------------------------------------------------------------------------
+
+# mode — глобальный режим для ПИШУЩИХ инструментов:
+#   read_only  — запись полностью запрещена; write-инструменты скрыты из /tools
+#   guarded    — запись разрешена ТОЛЬКО если target подходит под allow-паттерн
+#                (и не подходит под deny). Пустой allow => запрещено всё.
+#   full       — запись разрешена; проверяется только deny (allow игнорируется)
+mode: guarded
+
+# require_confirm — если true, каждый пишущий вызов должен явно прийти с
+# arguments._confirm = true (двойное подтверждение перед актуацией).
+require_confirm: false
+
+# tools — жёсткий per-tool оверрайд поверх mode. true — включить (даже в
+# read_only), false — выключить полностью (даже в full). Закомментировано =
+# поведение по mode.
+tools:
+  shell_exec: false
+  # ros2_topic_publish:    true
+  # ros2_service_call:     true
+  # ros2_action_send_goal: true
+  # ros2_param_set:        true
+  # file_write:            true
+
+# rules — тонкая настройка по имени цели. Паттерны — регэкспы (re.search).
+# deny всегда сильнее allow. Категории:
+#   topic_publish     target = имя топика
+#   service_call      target = имя сервиса
+#   action_send_goal  target = имя action
+#   param_set         target = имя ноды
+#   file_write        target = путь файла
+#   shell_exec        target = вся командная строка
+rules:
+
+  topic_publish:
+    # Разрешаем публикацию только в командные входы автопилота и offboard.
+    allow:
+      - '^/fmu/in/.*'
+      - '^/offboard/.*'
+    deny: []
+
+  service_call:
+    # Разрешаем любые сервисы, КРОМЕ явно опасных для железа.
+    allow:
+      - '.*'
+    deny:
+      - '.*stop_all_motors.*'   # аварийная остановка моторов
+      - '.*motor_test.*'        # раскрутка отдельных моторов
+      - '.*/reboot.*'
+      - '.*reset_param.*'       # сброс параметров PX4
+
+  action_send_goal:
+    # Калибровка/лог — ок; расширяй список по мере надобности.
+    allow:
+      - '^/fmu_control/calibrate$'
+      - '^/fmu_control/download_log$'
+    deny: []
+
+  param_set:
+    # По умолчанию менять параметры нод разрешено везде, кроме автопилота.
+    allow:
+      - '.*'
+    deny:
+      - '^/fmu_control$'        # параметры PX4 меняй осознанно — сними deny сам
+
+  file_write:
+    # Писать можно только во временную зону и логи.
+    allow:
+      - '^/tmp/.*'
+      - '^/home/sverk/logs/.*'
+    deny: []
+
+  shell_exec:
+    # Произвольные shell-команды в контейнере sverk_mcp (общий volume
+    # /home/sverk с SITL). target = вся командная строка (re.search).
+    # allow — что можно; deny сильнее (защита от катастроф).
+    # Интерактивные TUI (nano/htop/vi/less) НЕ в allow: они не работают по
+    # HTTP (нет PTY) — используй file_write и "top -b -n1"/ps/free.
+    allow:
+      - '^colcon( |$)'                                    # сборка workspace
+      - '^ros2( |$)'
+      - '^source( |$)'
+      - '^(ls|cat|find|tree|touch|mkdir|rm|cp|mv|stat|head|tail|wc|grep|sed|awk|du|df|pwd|echo|env|which|realpath|chmod)( |$)'
+      - '^(ps|top|free|uptime|whoami|id|uname|date)( |$)'
+    deny:
+      - 'rm\s+-[rf]*\s*/(\s|$)'                           # rm -rf /
+      - 'rm\s+-[rf]*\s+/home/sverk(\s|$)'                 # снос общего workspace
+      - '\bmkfs\b'
+      - '(^|[|&;\s])dd\s'
+      - '\b(reboot|shutdown|halt|poweroff|init)\b'
+      - ':\(\)\s*\{.*\};'                                 # fork bomb
+      - '>\s*/dev/(sd|nvme|mmc)'

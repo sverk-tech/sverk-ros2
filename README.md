@@ -64,6 +64,18 @@ finally:
 
 > Полный набор сценариев (миссии, камера, LED, GPIO, телеметрия) — в [примерах](sverk_interfaces/examples) и [документации](docs/).
 
+### Симулятор (без железа)
+
+Попробовать стек без дрона можно в готовом SITL-симуляторе (PX4 + Gazebo Harmonic + ROS 2) — образ скачивается, собирать ничего не нужно:
+
+```bash
+cd simulation/compose
+cp .env.example .env          # Windows: Copy-Item .env.example .env
+./sim.sh up novnc             # Windows: .\sim.ps1 up novnc
+```
+
+Откройте <http://localhost:6080/vnc.html>. Подробности и остальные режимы (WSLg, IDE, MCP) — в [руководстве по симулятору](simulation/docs/guide.md).
+
 ## Структура проекта
 
 ```plaintext

@@ -1,0 +1,8 @@
+# WSL2 + WSLg: окружение NVIDIA GPU (по умолчанию).
+# Использовать вместе с docker-compose.sim.yml и docker-compose.sim.wslg.yml.
+services:
+  sitl:
+    environment:
+      - LD_LIBRARY_PATH=/usr/lib/wsl/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+      - MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA
+      - NVIDIA_DRIVER_CAPABILITIES=all

@@ -1,0 +1,70 @@
+# ==============================================================
+# SVERK SITL — симулятор дрона
+# x86_64, Gazebo Harmonic, PX4 v1.15.4, ROS 2 Humble.
+#
+# Это ГОТОВЫЙ образ: сборка не нужна, только `docker pull` + `up`.
+# Файл самодостаточный — секции `build:` здесь НЕТ (исходники не нужны).
+# Тег образа берётся из .env (см. .env.example → скопировать в .env).
+#
+# Базовый файл сам по себе даёт headless-режим (без окна Gazebo).
+# Для картинки добавьте ОДИН оверлей:
+#   noVNC (браузер, любой ноут):     + docker-compose.sim.novnc.yml
+#   WSLg + NVIDIA (Windows):         + docker-compose.sim.wslg.yml + .wslg.nvidia.yml
+#   WSLg + Intel Arc (Windows):      + docker-compose.sim.wslg.yml + .wslg.intel.yml
+#   нативный Linux X11:              + docker-compose.sim.linux-host.yml
+#
+# Полные команды и что делать внутри — в docs/PARTICIPANTS.md.
+# ==============================================================
+
+services:
+  sitl:
+    # Готовый образ с Docker Hub. Тег задаётся в .env (SIM_IMAGE).
+    # noVNC-оверлей подменяет его на SIM_IMAGE_NOVNC.
+    image: ${SIM_IMAGE:-ilyawwww/sverk-ros2:v1.9-sim}
+
+    container_name: sverk_sitl
+
+    platform: linux/amd64
+
+    shm_size: 4g            # Gazebo + Fast DDS требуют больше SHM
+
+    # host.docker.internal нужен, чтобы MAVLink дотянулся до QGroundControl
+    # на хосте сквозь Docker NAT (edit_rcS.bash патчит IP по этому имени).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_LOCALHOST_ONLY=0
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/home/sverk/builder/fastdds_profile.xml
+      # Пути к gz-плагинам (спрей/servo/LED) и моделям — уже запечены в образ,
+      # дублируем на случай, если том перекрыл ENV.
+      - GZ_SIM_SYSTEM_PLUGIN_PATH=/home/sverk/spray_plugin_ws/install/gz_sim_spray_painting_plugin/lib/gz_sim_spray_painting_plugin:/home/sverk/sverk_ws/install/graffiti_servo_gz_plugin/lib/graffiti_servo_gz_plugin:/home/sverk/sverk_ws/install/led_strip_gz_plugin/lib/led_strip_gz_plugin
+      - GZ_SIM_RESOURCE_PATH=/home/sverk/PX4-Autopilot/Tools/simulation/gz/models
+
+    ports:
+      - "2222:22"           # SSH → ssh sverk@localhost -p 2222 (пароль: sverk)
+      - "8888:8888"         # rosboard (веб-просмотр топиков)
+      - "9090:9090"         # ros_services_bridge
+      - "8080:8080"         # web_video_server
+      - "7777:7777"
+      - "8086:8086"         # pid_tuning_assistant (enable_pid_tuning:=true)
+      - "14550:14550/udp"   # MAVLink → QGroundControl на хосте
+
+    volumes:
+      - sverk_sim_fs:/home/sverk
+
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+    networks:
+      - sverk_sitl
+
+networks:
+  sverk_sitl:
+    driver: bridge
+
+volumes:
+  sverk_sim_fs:

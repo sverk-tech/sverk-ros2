@@ -1,0 +1,28 @@
+# Нативный Linux-десктоп: Gazebo рендерится через X11/XWayland хоста.
+#
+# Запуск:
+#   xhost +local:docker        # один раз, разрешить X11-подключения
+#   docker compose \
+#     -f docker-compose.sim.yml \
+#     -f docker-compose.sim.linux-host.yml \
+#     up -d
+#
+# Внутри контейнера:
+#   # NVIDIA (по умолчанию):
+#   ros2 launch launch_system full_system_sitl.launch.py \
+#     host_x11_gui:=true obrik_config:=base gz_world:=obrik_aruco
+#   # Intel/AMD:
+#   GPU_VENDOR=intel ros2 launch launch_system full_system_sitl.launch.py \
+#     host_x11_gui:=true obrik_config:=base gz_world:=obrik_aruco
+services:
+  sitl:
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    devices:
+      - /dev/dri:/dev/dri
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_QPA_PLATFORM=xcb
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - NVIDIA_DRIVER_CAPABILITIES=all

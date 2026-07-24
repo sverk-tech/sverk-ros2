@@ -1,0 +1,61 @@
+# MCP — ROS 2 MCP HTTP-сервер (порт 8765) как ОТДЕЛЬНЫЙ контейнер-сайдкар
+# рядом с симулятором. Даёт агентам (LLM/скриптам) инструменты над живым
+# ROS-графом SITL: список нод/топиков, echo, вызов сервисов, публикация,
+# чтение параметров и т.п. — с ограничителем прав (mcp_policy.yaml).
+#
+# Это ОТДЕЛЬНЫЙ образ (SIM_IMAGE_MCP). НЕ подменяет sitl — поднимается вторым
+# контейнером и цепляется к сети sverk_sitl, чтобы видеть граф через DDS.
+# Сочетается с любым режимом отображения (novnc / wslg / headless / ide).
+#
+# Запуск (пример: noVNC + MCP):
+#   docker compose \
+#     -f docker-compose.sim.yml \
+#     -f docker-compose.sim.novnc.yml \
+#     -f docker-compose.sim.mcp.yml \
+#     up -d
+#
+# Проверка с хоста:
+#   curl -s http://localhost:8765/healthz
+#   curl -s http://localhost:8765/tools     # список доступных инструментов
+#   curl -s http://localhost:8765/policy    # что сейчас разрешено писать
+#
+# Права на ПИШУЩИЕ инструменты правятся в ./mcp_policy.yaml (перечитывается
+# по mtime — перезапуск контейнера не нужен). По умолчанию mode: guarded.
+services:
+  mcp:
+    image: ${SIM_IMAGE_MCP:-ilyawwww/sverk-ros2:v1.9-sim-mcp}
+    container_name: sverk_mcp
+    platform: linux/amd64
+
+    # Базовый образ sitl несёт ENTRYPOINT start_sitl.sh (sshd + sleep), который
+    # проглатывает CMD образа mcp → server.py не стартует. Запускаем сервер явно.
+    entrypoint: ["/bin/bash", "-lc"]
+    command:
+      - "source /opt/ros/humble/setup.bash && source /home/sverk/sverk_ws/install/setup.bash 2>/dev/null; exec python3 /home/sverk/sverk_ws/src/sverk_drone/web/ros2_mcp/ros2_mcp/server.py"
+
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_LOCALHOST_ONLY=0
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8765
+      - MCP_POLICY_FILE=/policy/mcp_policy.yaml
+
+    ports:
+      - "8765:8765"           # MCP HTTP API
+
+    # sverk_sitl → видеть ноды PX4/Gazebo/aruco через Fast DDS UDP.
+    # default    → оставаться доступным по имени http://sverk_mcp:8765.
+    networks:
+      - default
+      - sverk_sitl
+
+    volumes:
+      - /dev/shm:/dev/shm
+      - sverk_sim_fs:/home/sverk           # тот же том, что у sitl — доступ к файлам
+      - ./mcp_policy.yaml:/policy/mcp_policy.yaml:ro
+
+    depends_on:
+      - sitl
+
+    restart: unless-stopped
