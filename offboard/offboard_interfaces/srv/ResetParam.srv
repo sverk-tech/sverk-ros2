@@ -1,0 +1,4 @@
+string name    # parameter name to reset; empty or "*" resets ALL parameters
+---
+bool success
+string message

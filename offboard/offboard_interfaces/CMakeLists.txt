@@ -10,21 +10,44 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(action_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+    "srv/GetParam.srv"
+    "srv/ResetParam.srv"
+    "srv/BackupParams.srv"
+    "srv/MotorTest.srv"
     "srv/GetTelemetry.srv"
     "srv/Navigate.srv"
     "srv/NavigateGlobal.srv"
     "srv/SetAltitude.srv"
     "srv/SetAttitude.srv"
+    "srv/SetParam.srv"
     "srv/SetPosition.srv"
     "srv/SetRates.srv"
+    "srv/SetTrajectory.srv"
     "srv/SetVelocity.srv"
     "srv/SetYaw.srv"
     "srv/SetYawRate.srv"
     "srv/Flip.srv"
+    "srv/StopExcitation.srv"
+    "srv/EmergencyStop.srv"
+    "srv/ReturnToLaunch.srv"
+
+    "action/Calibrate.action"
+    "action/DownloadLog.action"
+    "action/RunExcitation.action"
+    "action/ReceiveTelemetry.action"
+    "action/NavigateTo.action"
 
     "msg/State.msg"
+    "msg/Param.msg"
+    "msg/ExcitationSample.msg"
+    "msg/Telemetry.msg"
+    "msg/OffboardStatus.msg"
+    "msg/TrajectoryCorrection.msg"
+
+    DEPENDENCIES action_msgs
 )
 
 if(BUILD_TESTING)

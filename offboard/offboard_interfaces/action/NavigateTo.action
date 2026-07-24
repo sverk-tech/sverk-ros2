@@ -1,0 +1,21 @@
+# navigate_wait: same goal fields as Navigate.srv, but the action tracks the
+# flight and returns the result on arrival (feedback = distance/eta/phase).
+# Exit paths: arrival (fine or `tolerance`), `timeout` (drone parks to hold,
+# success=false), cancel (parks to hold), or the maneuver being superseded.
+float32 x
+float32 y
+float32 z
+float32 yaw
+float32 speed
+string frame_id
+bool auto_arm
+float32 timeout                # s; 0 = auto (3x nominal flight time + 10 s); <0 = no limit
+float32 tolerance              # m; relaxed arrival radius for the result; 0 = fine tolerance (0.08 m + yaw)
+---
+bool success
+string message
+float32 final_distance_error   # m to target at finish
+---
+float32 distance_remaining     # m to target
+float32 eta                    # s, estimate from remaining distance / speed
+string phase                   # arming|moving|arrived

@@ -1,0 +1,6 @@
+# Read ALL PX4 parameters by index (reliable, gap-filled) for a trustworthy backup.
+---
+bool success
+string message
+uint16 total        # total parameter count reported by the FMU
+Param[] params      # all parameters that were read back

@@ -1,0 +1,10 @@
+# Stream telemetry as action feedback at a client-chosen rate.
+float32 rate_hz         # desired feedback rate, Hz (0 < rate_hz <= 200)
+string frame_id         # output frame (as in get_telemetry; empty = map)
+float32 duration        # s, 0 = until cancel
+---
+bool success
+string message
+uint32 samples_sent
+---
+Telemetry telemetry

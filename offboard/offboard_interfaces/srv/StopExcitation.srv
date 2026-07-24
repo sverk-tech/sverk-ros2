@@ -1,0 +1,7 @@
+# Independent fast-stop for an in-progress excitation run.
+# Action cancellation is the normal path; this service is the fallback when the
+# action client is unavailable. Handled server-side in.
+bool emergency              # true = immediately to Position/Hold, do not play out ramp-out
+---
+bool success
+string message

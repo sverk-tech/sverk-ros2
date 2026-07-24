@@ -1,0 +1,21 @@
+# Start a PX4 sensor calibration and stream progress/instructions.
+# Feedback is parsed from PX4 [cal] STATUSTEXT (LogMessage over DDS).
+
+uint8 sensor            # which sensor (constants below)
+string confirm          # safety phrase; REQUIRED for ESC: "I_UNDERSTAND_WHAT_I_AM_DOING"
+
+uint8 SENSOR_GYRO = 0
+uint8 SENSOR_MAG = 1
+uint8 SENSOR_BARO = 2
+uint8 SENSOR_ACCEL = 3
+uint8 SENSOR_LEVEL = 4
+uint8 SENSOR_ESC = 5
+---
+bool success
+string message
+---
+float32 progress        # 0.0 - 1.0
+string instruction      # human-readable next action
+string orientation      # none | down | up | left | right | front | back
+uint8 step              # completed steps so far
+uint8 total_steps       # expected steps (0 if unknown)

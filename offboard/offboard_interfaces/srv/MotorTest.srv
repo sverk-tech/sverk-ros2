@@ -1,0 +1,6 @@
+uint8 motor_id       # 1-based motor index (per PX4 DO_MOTOR_TEST)
+float32 throttle     # 0.0 - 1.0
+float32 timeout_s    # how long the motor spins
+---
+bool success
+string message

@@ -1,0 +1,22 @@
+# Download the latest .ulg from the FCU's SD card over uXRCE-DDS
+# (log_download_bridge), reliable ack-driven windowed pull, streamed progress.
+# No MAVLink / physical access to the FCU required.
+
+string path             # local (companion-side) file path to save the log to
+float32 timeout_s       # overall download deadline; 0 = auto (server picks
+                        # a budget from the reported file size, measured
+                        # throughput ~20 KB/s on the real link)
+
+---
+bool success
+string message
+string log_name          # basename of the downloaded log, e.g. "12_34_56.ulg"
+uint32 file_size         # total size reported by the FCU (bytes)
+uint32 bytes_received    # bytes actually written to `path`
+
+---
+float32 progress         # 0.0 - 1.0 (chunks_received / chunks_total)
+uint32 bytes_received
+uint32 file_size
+uint16 chunks_received
+uint16 chunks_total

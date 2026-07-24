@@ -1,0 +1,44 @@
+# Run a controlled excitation maneuver on one axis for closed-loop system ID.
+# Injects a windowed, zero-mean disturbance (step/doublet/3211/chirp/multisine/prbs)
+# on top of a hover baseline, streams live feedback, and is cancellable.
+# NOT read-only: this publishes real setpoints to PX4. Safety envelope (§4 of the
+# excitation context) is enforced server-side.
+
+# --- GOAL ---
+string axis                 # "roll" | "pitch" | "yaw"
+string signal               # "step"|"doublet"|"3211"|"chirp"|"multisine"|"prbs"
+uint8 loop                  # 0 = attitude (Pattern A, safe), 1 = rate (Pattern B, advanced)
+float32 amplitude           # rate rad/s (loop=rate) OR angle rad (loop=attitude)
+float32 duration            # excitation window length, s (0 = auto from signal)
+float32 f_min               # Hz, low band edge for chirp/multisine/prbs
+float32 f_max               # Hz, high band edge
+float32 base_period         # s, for 3211/doublet: dt = 1/(2*f_mode); 0 = auto from f_max
+uint32 seed                 # for prbs/multisine phases (reproducibility)
+float32 taper               # Tukey window fraction [0..0.5], default 0.15
+bool auto_arm               # arm + enter offboard if not already
+float32 hold_alt            # desired hold altitude, m (0 = current at start)
+float32 max_tilt_deg        # hard cap on total tilt, default 20
+float32 geofence_radius     # m from start point; 0 = node parameter default
+string confirm              # REQUIRED safety phrase: "I_UNDERSTAND_WHAT_I_AM_DOING"
+
+uint8 LOOP_ATTITUDE = 0
+uint8 LOOP_RATE = 1
+---
+# --- RESULT ---
+bool success
+string message
+uint32 samples_injected     # number of r(t) samples sent
+float32 achieved_rate_hz    # actual setpoint stream rate over the window
+float32 max_tilt_seen_deg   # peak total tilt during the maneuver
+float32 max_drift_m         # peak horizontal drift from start
+string abort_reason         # "" if clean; otherwise cause (timeout/rc/geofence/tilt/...)
+string run_tag              # recording tag to correlate with the analyzer
+---
+# --- FEEDBACK ---
+float32 elapsed             # s since window start
+float32 progress            # 0..1
+string phase                # "capture"|"settle_in"|"inject"|"settle_out"|"revert"
+float32 current_ref         # current r(t) on the axis (rad/s or rad)
+float32 current_rate        # measured rate on the axis (rad/s)
+float32 current_tilt_deg    # current total tilt
+float32 current_drift_m     # current horizontal drift

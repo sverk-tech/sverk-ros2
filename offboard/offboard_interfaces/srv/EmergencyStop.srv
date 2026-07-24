@@ -1,0 +1,7 @@
+# Universal emergency stop: immediately parks any active maneuver
+# (navigate/set_*/flip/NavigateTo/excitation). land=false -> hold the current
+# position; land=true -> stop the maneuver and initiate landing.
+bool land
+---
+bool success
+string message

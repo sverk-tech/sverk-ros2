@@ -1,0 +1,5 @@
+# Stop the active maneuver and send VEHICLE_CMD_NAV_RETURN_TO_LAUNCH: the
+# drone flies back to its launch (home) position and lands (PX4 AUTO.RTL).
+---
+bool success
+string message
