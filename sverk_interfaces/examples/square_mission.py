@@ -1,23 +1,29 @@
 """
 Example: flying a square in the map plane and returning to the start point.
 
-Uses navigate_wait via drone.controll.navigate_wait().
+Uses navigate_wait via drone.control.navigate_wait(). Since the offboard
+hardening block, navigate_wait rides the /navigate_to action: the arrival is
+tracked onboard by offboard_control (no telemetry polling from Python), and an
+unreachable target ends with TimeoutError + the drone parked to hold.
 """
 
 import time
 import sverk_interfaces
 
-side = 1.0  # square side length, m
-z = 1.0     # flight altitude, m
+side = 1.0    # square side length, m
+climb = 1.0   # flight altitude above the start point, m
 
 drone = sverk_interfaces.init(Nodename="example_square_mission")
 try:
-    # Take current position as the square's zero point (map).
-    start = drone.controll.get_telemetry(frame_id="map")
+    # Take current position as the square's zero point (map). The altitude is
+    # RELATIVE to the start (start.z + climb): the absolute map-frame ground
+    # level differs between worlds/odometry sources (e.g. a VPE/ArUco map).
+    start = drone.control.get_telemetry(frame_id="map")
     x0, y0 = start.x, start.y
+    z = start.z + climb
 
     # Takeoff / climb above the start point.
-    drone.controll.navigate_wait(
+    drone.control.navigate_wait(
         x=x0,
         y=y0,
         z=z,
@@ -39,7 +45,7 @@ try:
 
     for i, (x, y) in enumerate(waypoints, start=1):
         print(f"Side {i}: target point ({x:.2f}, {y:.2f}, {z:.2f})")
-        drone.controll.navigate_wait(
+        drone.control.navigate_wait(
             x=x,
             y=y,
             z=z,
@@ -53,6 +59,6 @@ try:
         time.sleep(1.0)
 
     # Land after completing the square.
-    drone.controll.land(timeout=10.0)
+    drone.control.land(timeout=10.0)
 finally:
     drone.close()

@@ -3,9 +3,11 @@
   <name>sverk_interfaces</name>
   <version>0.0.1</version>
   <description>
-    High-level Python client for sverk_drone: offboard_control, fmu_calibration_control
+    High-level Python client for sverk_drone: offboard_control, fmu_control
     and optional led_control (LED strip). Requires offboard_interfaces, std_msgs, std_srvs;
     for LED API (drone.led) optional: led_interfaces and led_control node.
+    Camera calibration API (drone.image.calibration) uses camera_calibration services;
+    QR detection (drone.image.detect_qr) needs the pip package "pyzbar" (+ system libzbar0).
   </description>
 
   <maintainer email="petayyyy@gmail.com">Petayyyy</maintainer>
@@ -16,7 +18,8 @@
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>offboard_control</exec_depend>
-  <exec_depend>fmu_calibration_control</exec_depend>
+  <exec_depend>fmu_control</exec_depend>
+  <exec_depend>camera_calibration</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

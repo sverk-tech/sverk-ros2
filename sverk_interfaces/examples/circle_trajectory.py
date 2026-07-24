@@ -13,7 +13,7 @@ duration = 20  # circle movement duration, s
 drone = sverk_interfaces.init(Nodename="example_circle_trajectory")
 try:
     # 1. Takeoff to 1.5 m relative to body (frame_id='body'), with auto-arm.
-    drone.controll.navigate(
+    drone.control.navigate(
         x=0.0,
         y=0.0,
         z=1.5,
@@ -25,7 +25,7 @@ try:
     time.sleep(10.0)
 
     # Start point and altitude in map frame.
-    start = drone.controll.get_telemetry(frame_id="map")
+    start = drone.control.get_telemetry(frame_id="map")
 
     # Takeoff / climb.
     target_z = start.z, 1.0
@@ -40,7 +40,7 @@ try:
         x = start.x + math.sin(angle) * radius
         y = start.y + math.cos(angle) * radius
 
-        drone.controll.set_position(
+        drone.control.set_position(
             x=x,
             y=y,
             z=target_z,
@@ -52,7 +52,7 @@ try:
         time.sleep(dt)
 
     # Return to start point and land.
-    drone.controll.navigate(
+    drone.control.navigate(
         x=start.x,
         y=start.y,
         z=target_z,
@@ -62,6 +62,6 @@ try:
         auto_arm=False,
     )
     time.sleep(5.0)
-    drone.controll.land(timeout=10.0)
+    drone.control.land(timeout=10.0)
 finally:
     drone.close()

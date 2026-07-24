@@ -17,7 +17,7 @@ setup(
     maintainer_email="petayyyy@gmail.com",
     description=(
         "High-level Python client library for sverk_drone: offboard_control, "
-        "fmu_calibration_control and optional led_control (LED strip) ROS 2 nodes."
+        "fmu_control and optional led_control (LED strip) ROS 2 nodes."
     ),
     license="MIT",
     tests_require=["pytest"],

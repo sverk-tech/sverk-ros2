@@ -1,6 +1,6 @@
 """
 Example of low-level LED control: setting color by index
-and reading the strip state from the /led/state topic.
+and reading the strip state from the /led_control/state topic.
 
 Requires the led_control node to be running (ros2 launch led_control led.launch.py)
 and the led_interfaces package in the workspace.
@@ -35,8 +35,8 @@ try:
     ])
     time.sleep(2.0)
 
-    # Reading the current strip state from the /led/state topic
-    print("Reading strip state (once from /led/state)...")
+    # Reading the current strip state from the /led_control/state topic
+    print("Reading strip state (once from /led_control/state)...")
     state = drone.led.get_state(timeout=3.0)
     if state:
         print(f"  Total LEDs: {len(state.leds)}")
