@@ -7,6 +7,7 @@
 #include "offboard_interfaces/srv/set_yaw.hpp"
 #include "offboard_interfaces/srv/set_yaw_rate.hpp"
 #include "offboard_interfaces/srv/set_position.hpp"
+#include "offboard_interfaces/srv/set_trajectory.hpp"
 #include "offboard_interfaces/srv/set_velocity.hpp"
 #include "offboard_interfaces/srv/set_attitude.hpp"
 #include "offboard_interfaces/srv/set_rates.hpp"
@@ -24,6 +25,21 @@
 #include "px4_msgs/msg/battery_status.hpp"
 #include "px4_msgs/msg/vehicle_global_position.hpp"
 #include "px4_msgs/msg/manual_control_setpoint.hpp"
+#include "px4_msgs/msg/vehicle_angular_velocity.hpp"
+#include "px4_msgs/msg/hover_thrust_estimate.hpp"
+#include "px4_msgs/msg/vehicle_land_detected.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "offboard_interfaces/action/run_excitation.hpp"
+#include "offboard_interfaces/action/receive_telemetry.hpp"
+#include "offboard_interfaces/action/navigate_to.hpp"
+#include "offboard_interfaces/srv/stop_excitation.hpp"
+#include "offboard_interfaces/srv/emergency_stop.hpp"
+#include "offboard_interfaces/srv/return_to_launch.hpp"
+#include "offboard_interfaces/msg/excitation_sample.hpp"
+#include "offboard_interfaces/msg/telemetry.hpp"
+#include "offboard_interfaces/msg/offboard_status.hpp"
+#include "offboard_interfaces/msg/trajectory_correction.hpp"
+#include "offboard_control/excitation_signals.hpp"
 #include "px4_ros_com/frame_transforms.h"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
@@ -44,6 +60,7 @@
 #include "tf2/utils.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include <cmath>
+#include <array>
 #include <string>
 #include <memory>
 #include <map>
@@ -52,6 +69,11 @@
 #include <limits>
 #include <optional>
 #include <vector>
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <thread>
 
 
 using namespace std::chrono_literals;
@@ -98,22 +120,122 @@ enum SetpointType {
     NAVIGATE_GLOBAL,
     POSITION,
     VELOCITY,
+    TRAJECTORY,
     ATTITUDE,
     RATES,
     FLIP,
     ALTITUDE,
     YAW,
     YAW_RATE,
+    EXCITE,
 };
+
+// Human-readable name of a SetpointType (diagnostics topic, logs, tests).
+inline const char * setpoint_type_to_string(SetpointType type) {
+    switch (type) {
+        case NONE:            return "NONE";
+        case NAVIGATE:        return "NAVIGATE";
+        case NAVIGATE_GLOBAL: return "NAVIGATE_GLOBAL";
+        case POSITION:        return "POSITION";
+        case VELOCITY:        return "VELOCITY";
+        case TRAJECTORY:      return "TRAJECTORY";
+        case ATTITUDE:        return "ATTITUDE";
+        case RATES:           return "RATES";
+        case FLIP:            return "FLIP";
+        case ALTITUDE:        return "ALTITUDE";
+        case YAW:             return "YAW";
+        case YAW_RATE:        return "YAW_RATE";
+        case EXCITE:          return "EXCITE";
+    }
+    return "UNKNOWN";
+}
+
+// PX4 nav_state to the mode string used by GetTelemetry/Telemetry/OffboardStatus.
+inline const char * nav_state_to_string(uint8_t nav_state) {
+    switch (nav_state) {
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD:     return "OFFBOARD";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_LAND:    return "AUTO.LAND";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_LOITER:  return "AUTO.LOITER";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_MISSION: return "AUTO.MISSION";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_RTL:     return "AUTO.RTL";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_AUTO_TAKEOFF: return "AUTO.TAKEOFF";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_MANUAL:       return "MANUAL";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_ACRO:         return "ACRO";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_ALTCTL:       return "ALTCTL";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_POSCTL:       return "POSCTL";
+        case px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_STAB:         return "STABILIZE";
+        default:                                                          return "UNKNOWN";
+    }
+}
+
+// Pure numeric part of the central setpoint validation (prompt 99) — a free
+// function so it is unit-testable without a node instance (prompt 102). The
+// node-side validate_setpoint() wraps it with the configured max_speed.
+inline bool validate_setpoint_numeric(SetpointType kind, double x, double y, double z,
+                                      double speed, double max_speed, std::string & reason)
+{
+    if (kind == NAVIGATE) {
+        // Historical navigate checks, absorbed verbatim (partial NaN targets are
+        // legal there: NaN = keep the current coordinate).
+        if (std::isinf(x) || std::isinf(y) || std::isinf(z)) {
+            reason = "x, y, z arguments cannot be Inf";
+            return false;
+        }
+        if (std::isinf(speed)) {
+            reason = "speed argument cannot be Inf";
+            return false;
+        }
+        if (std::isfinite(x) != std::isfinite(y)) {
+            reason = "x and y can be set only together";
+            return false;
+        }
+        if (speed < 0) {
+            reason = "Navigate speed must be positive";
+            return false;
+        }
+        if (std::isnan(x) && std::isnan(y) && std::isnan(z)) {
+            reason = "At least one of x, y, z must be finite";
+            return false;
+        }
+        if (max_speed > 0.0 && speed > max_speed) {
+            reason = "speed exceeds max_speed (" + std::to_string(max_speed) + " m/s)";
+            return false;
+        }
+    } else if (kind == POSITION) {
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+            reason = "x, y, z must be finite";
+            return false;
+        }
+    } else if (kind == VELOCITY) {
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+            reason = "vx, vy, vz must be finite";
+            return false;
+        }
+        if (max_speed > 0.0 && std::sqrt(x * x + y * y + z * z) > max_speed) {
+            reason = "velocity magnitude exceeds max_speed (" + std::to_string(max_speed) + " m/s)";
+            return false;
+        }
+    }
+    return true;
+}
 
 enum class FlipAxis { ROLL, PITCH, YAW };
 
 enum class FlipPhase { CLIMB, ROTATE, POSITION_HOLD };
 
+// Excitation maneuver phases ( / excitation context §4).
+enum class ExcitePhase { SETTLE_IN, INJECT, SETTLE_OUT, REVERT };
+
 class TransformPX4 {
 public:
     using QuaternionArray = std::array<float, 4>;
-    
+
+    static double normalizeYaw(double yaw) {
+        while (yaw > M_PI) yaw -= 2.0 * M_PI;
+        while (yaw < -M_PI) yaw += 2.0 * M_PI;
+        return yaw;
+    }
+
     static double interpolateYaw(double start_yaw, double end_yaw, double ratio) {
         double diff = std::atan2(std::sin(end_yaw - start_yaw), std::cos(end_yaw - start_yaw));
         double interpolated_diff = diff * ratio;
@@ -351,6 +473,14 @@ public:
         return transformation_error_;
     }
 
+    Pose targetPoseNED() const {
+        return target_pose_ned_;
+    }
+
+    double targetSpeed() const {
+        return target_speed_;
+    }
+
     builtin_interfaces::msg::Time now() const {
         auto now = std::chrono::system_clock::now();
         auto now_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(now);
@@ -407,6 +537,7 @@ private:
     rclcpp::Service<offboard_interfaces::srv::SetYaw>::SharedPtr set_yaw_service_;
     rclcpp::Service<offboard_interfaces::srv::SetYawRate>::SharedPtr set_yaw_rate_service_;
     rclcpp::Service<offboard_interfaces::srv::SetPosition>::SharedPtr set_position_service_;
+    rclcpp::Service<offboard_interfaces::srv::SetTrajectory>::SharedPtr set_trajectory_service_;
     rclcpp::Service<offboard_interfaces::srv::SetVelocity>::SharedPtr set_velocity_service_;
     rclcpp::Service<offboard_interfaces::srv::SetAttitude>::SharedPtr set_attitude_service_;
     rclcpp::Service<offboard_interfaces::srv::SetRates>::SharedPtr set_rates_service_;
@@ -417,6 +548,8 @@ private:
     rclcpp::Publisher<px4_msgs::msg::TrajectorySetpoint>::SharedPtr trajectory_setpoint_publisher_;
     rclcpp::Publisher<px4_msgs::msg::VehicleAttitudeSetpoint>::SharedPtr vehicle_attitude_setpoint_publisher_;
     rclcpp::Publisher<px4_msgs::msg::VehicleRatesSetpoint>::SharedPtr vehicle_rates_setpoint_publisher_;
+    // Excitation reference r(t) for the analyzer — NOT a /fmu/in topic.
+    rclcpp::Publisher<offboard_interfaces::msg::ExcitationSample>::SharedPtr excitation_reference_publisher_;
     rclcpp::Client<px4_msgs::srv::VehicleCommand>::SharedPtr vehicle_command_client_;
 
     // --- Subscribers ---
@@ -425,6 +558,15 @@ private:
     rclcpp::Subscription<px4_msgs::msg::VehicleGlobalPosition>::SharedPtr vehicle_global_pos_subscriber_;
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odom_subscriber_;
     rclcpp::Subscription<px4_msgs::msg::ManualControlSetpoint>::SharedPtr manual_control_subscriber_;
+    rclcpp::Subscription<px4_msgs::msg::VehicleAngularVelocity>::SharedPtr angular_velocity_subscriber_;
+    // PX4 hover-thrust estimate (P0-1): the excitation baseline reads this at target
+    // start instead of the excite_hover_thrust constant, so Pattern B enters at the
+    // real hover throttle even as the battery sags over a session.
+    rclcpp::Subscription<px4_msgs::msg::HoverThrustEstimate>::SharedPtr hover_thrust_subscriber_;
+    // Land detector (P0-2): ground-guard for the excitation safety check — a biased
+    // EKF once let the drone "excite" a full chirp while sitting on the ground.
+    rclcpp::Subscription<px4_msgs::msg::VehicleLandDetected>::SharedPtr land_detected_subscriber_;
+    rclcpp::Subscription<offboard_interfaces::msg::TrajectoryCorrection>::SharedPtr trajectory_correction_subscriber_;
 
     // --- Timers ---
     rclcpp::TimerBase::SharedPtr setpoint_timer_;
@@ -446,9 +588,38 @@ private:
     double battery_timeout_;
     double manual_control_timeout_;
     bool is_simulator_;
-    double control_rate_;
+    // RC interception (prompt 95): in the simulator the RC gate stays off unless
+    // enforce_rc_in_sim=true (SITL with a joystick); rc_stick_abort_thresh is the
+    // stick deflection that returns control to the pilot during any maneuver.
+    bool enforce_rc_in_sim_ = false;
+    double rc_stick_abort_thresh_ = 0.05;
+    // Freshness watchdog (prompt 98): when true, a stale local position during
+    // an offboard position-dependent maneuver parks the drone (auto-hold on the
+    // last valid pose). Set false only for debugging.
+    bool enforce_freshness_ = true;
+    // Geofence / limits (prompt 99). Disabled by default: geofence_enable=false
+    // and max_speed=0 keep the previous behavior exactly. Center/altitude are in
+    // the map (ENU) frame; the excitation keeps its own start-relative fence.
+    bool geofence_enable_ = false;
+    double geofence_radius_ = 10.0;
+    double geofence_center_x_ = 0.0;
+    double geofence_center_y_ = 0.0;
+    double alt_floor_ = 0.0;
+    double alt_ceil_ = 50.0;
+    double max_speed_ = 0.0;  // 0 = no speed limit
+    // Atomic: mutated by the excitation execute() thread (raises the stream to
+    // excite_stream_hz on the window, restores after) and read on the timer thread.
+    std::atomic<double> control_rate_{30.0};
 
     // --- State ---
+    // Guards the telemetry snapshot below (current_vehicle_status_, battery,
+    // global/local position, manual control, angular velocity, attitude quat and
+    // their timestamps). Subscribers take it briefly to write; readers on other
+    // callback groups (services, excitation) copy into locals under the lock and
+    // work on the copy. TF publishing / transforms happen OUTSIDE the lock.
+    // LOCK ORDER: telemetry_mutex_ before cmd_mutex_ when both are needed; never
+    // hold either together with excite_mutex_.
+    std::mutex telemetry_mutex_;
     px4_msgs::msg::VehicleStatus current_vehicle_status_;
     uint64_t current_vehicle_status_timestamp_;
     float battery_voltage;
@@ -458,9 +629,23 @@ private:
     uint64_t current_global_position_timestamp_;
     px4_msgs::msg::ManualControlSetpoint current_manual_control_;
     uint64_t current_manual_control_timestamp_;
+
+    // Guards the commanded-setpoint block: setpoint_type_, position/velocity/
+    // attitude/rates targets, overrides, flip_* setup, last_sended_pose and the
+    // global_speed_controller_ pointer. Writers (service callbacks) store the
+    // target fields first and setpoint_type_ LAST under one lock, so the timer
+    // either sees the old type with the old fields or the new type with the new
+    // ones. The timer copies everything into a CmdSnapshot at the top of
+    // publish_setpoint() and publishes from the copy (no TF/publish under lock).
+    // LOCK ORDER: never hold cmd_mutex_ and excite_mutex_ together — the EXCITE
+    // path keeps its own synchronization (excite_mutex_ + atomics) untouched.
+    std::mutex cmd_mutex_;
+
     SetpointType setpoint_type_ = SetpointType::NONE;
     CurrentPose current_local_position_;
     px4_msgs::msg::TrajectorySetpoint last_sended_pose;
+    // Last safe-fallback reason (park_to_hold/RC abort/watchdog) — for ~/status.
+    std::string last_abort_reason_;
 
     // Overrides for NAVIGATE / POSITION: altitude, yaw, yaw_rate
     bool altitude_override_set_ = false;
@@ -477,6 +662,49 @@ private:
     std::string position_target_frame_id_;
     double velocity_target_vx_ = 0.0, velocity_target_vy_ = 0.0, velocity_target_vz_ = 0.0, velocity_target_yaw_ = 0.0;
     std::string velocity_target_frame_id_;
+
+    // Trajectory setpoint state (TRAJECTORY): position / velocity / acceleration
+    // are each an all-finite or all-NaN group (NaN = group off). All expressed in
+    // trajectory_frame_id_. Written under cmd_mutex_ (target fields first, then
+    // setpoint_type_) and copied into the CmdSnapshot on the timer tick.
+    std::array<double, 3> trajectory_position_{
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()};
+    std::array<double, 3> trajectory_velocity_{
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()};
+    std::array<double, 3> trajectory_acceleration_{
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()};
+    double trajectory_yaw_ = std::numeric_limits<double>::quiet_NaN();
+    double trajectory_yaw_rate_ = std::numeric_limits<double>::quiet_NaN();
+    std::string trajectory_frame_id_;
+
+    // High-rate feed-forward correction stream (~/trajectory_correction) layered
+    // on top of the base TRAJECTORY target. Each fresh correction group overrides
+    // the corresponding service group per tick; a stale stream (older than
+    // correction_timeout_) is dropped so the drone falls back to the base target.
+    // Guarded by corr_mutex_ (its own lock: written from the high-rate subscriber
+    // callback, read once per tick into the CmdSnapshot). Never nested with
+    // cmd_mutex_/telemetry_mutex_ — locked separately in snapshot_cmd_state().
+    std::mutex corr_mutex_;
+    std::array<double, 3> correction_velocity_{
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()};
+    std::array<double, 3> correction_acceleration_{
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::quiet_NaN()};
+    double correction_yaw_rate_ = std::numeric_limits<double>::quiet_NaN();
+    std::string correction_frame_id_;
+    // Node-clock receive time of the last correction (ns; 0 = never). Node-side
+    // stamp avoids publisher/node clock-domain mismatch in the freshness check.
+    int64_t correction_recv_ns_ = 0;
+    double correction_timeout_ = 0.5;  // s; <=0 disables the correction stream
 
     // Attitude / rates setpoint state
     float attitude_roll_ = 0.0f, attitude_pitch_ = 0.0f, attitude_yaw_ = 0.0f, attitude_thrust_ = 0.5f;
@@ -496,14 +724,261 @@ private:
     rclcpp::Time flip_rotate_start_time_;
     double flip_angle_done_ = 0.0;
 
+    // --- Excitation (system-ID) state ---
+    // Action + emergency-stop service + gyro. NOT read-only: publishes setpoints.
+    rclcpp_action::Server<offboard_interfaces::action::RunExcitation>::SharedPtr excitation_action_server_;
+    rclcpp::Service<offboard_interfaces::srv::StopExcitation>::SharedPtr stop_excitation_service_;
+    rclcpp::CallbackGroup::SharedPtr excite_callback_group_;
+
+    // Config parameters (safe, conservative defaults — see excitation context §4).
+    double excite_stream_hz_ = 200.0;        // high-rate setpoint stream on the window
+    double excite_settle_in_s_ = 1.5;        // hover-stabilize before injecting
+    double excite_settle_out_s_ = 1.5;       // return to trim after injecting
+    double excite_max_inject_s_ = 20.0;      // per-axis injection dead-man
+    double excite_max_session_s_ = 90.0;     // whole-maneuver dead-man
+    bool allow_rate_loop_excitation_ = false; // Pattern B gate (advanced, off by default)
+    double excite_geofence_radius_default_ = 2.0; // m from start
+    double excite_agl_floor_ = 1.0;          // m, minimum altitude above start
+    double excite_agl_ceil_ = 4.0;           // m, maximum altitude above start
+    double excite_kp_pos_ = 0.04;            // rad tilt per m horizontal error (small)
+    double excite_kp_alt_ = 0.05;            // thrust per m altitude error
+    double excite_kd_vel_ = 0.02;            // rad tilt per m/s horizontal velocity (drift damping, P0-4)
+    double excite_max_baseline_tilt_ = 0.087; // rad (~5 deg) cap on hover-loop tilt
+    double excite_hover_thrust_ = 0.5;       // baseline hover throttle [0..1] (param fallback for P0-1)
+    double excite_stick_abort_thresh_ = 0.05; // RC stick soft-abort deflection
+    double excite_settle_rate_thresh_ = 0.30;  // rad/s — settle_in exit gate (P2-9)
+    double excite_settle_vel_thresh_ = 0.30;   // m/s — settle_in exit gate (P2-9)
+
+    // Runtime state (mutated by timer + action threads).
+    ExcitePhase excite_phase_ = ExcitePhase::SETTLE_IN;
+    FlipAxis excite_axis_ = FlipAxis::ROLL;
+    bool excite_rate_loop_ = false;          // false = Pattern A (attitude)
+    std::unique_ptr<excitation::ExcitationSignal> excite_signal_;
+    Pose excite_initial_pose_ned_;
+    double excite_hold_alt_m_ = 0.0;         // desired altitude above start, m (+up)
+    double excite_hover_thrust_used_ = 0.5;  // per-run baseline throttle: PX4 estimate at start else param (P0-1)
+    double excite_start_yaw_ned_ = 0.0;
+    double excite_max_tilt_rad_ = 0.35;      // hard total-tilt cap from goal
+    double excite_geofence_radius_ = 2.0;
+    double excite_amplitude_ = 0.0;
+    rclcpp::Time excite_session_start_;
+    rclcpp::Time excite_phase_start_;
+    rclcpp::Time excite_inject_start_;
+    double excite_washout_state_ = 0.0;
+    double excite_prev_control_rate_ = 30.0; // rate to restore after the window
+    std::string excite_signal_str_;          // waveform name for ExcitationSample
+    double excite_bl_roll_ = 0.0;            // baseline hover tilt (rad) — for logging
+    double excite_bl_pitch_ = 0.0;
+    Eigen::Quaterniond current_q_ned_body_{1.0, 0.0, 0.0, 0.0};
+    float current_angular_velocity_[3] = {0.0f, 0.0f, 0.0f};
+    uint64_t current_angular_velocity_timestamp_ = 0;
+    // PX4 hover-thrust estimate (guarded by telemetry_mutex_). valid==false until the
+    // estimator converges; the excitation baseline only trusts a fresh, valid sample.
+    double current_hover_thrust_ = 0.0;
+    bool current_hover_thrust_valid_ = false;
+    uint64_t current_hover_thrust_timestamp_ = 0;
+    // Land-detector snapshot (guarded by telemetry_mutex_).
+    bool current_landed_ = false;
+    uint64_t current_landed_timestamp_ = 0;
+
+    // Metrics + feedback snapshot (guarded by excite_mutex_).
+    std::mutex excite_mutex_;
+    double excite_max_tilt_seen_deg_ = 0.0;
+    double excite_max_drift_m_ = 0.0;
+    uint32_t excite_samples_injected_ = 0;
+    double excite_fb_elapsed_ = 0.0;
+    double excite_fb_progress_ = 0.0;
+    std::string excite_fb_phase_;
+    double excite_fb_ref_ = 0.0;
+    double excite_fb_rate_ = 0.0;
+    double excite_fb_tilt_ = 0.0;
+    double excite_fb_drift_ = 0.0;
+    std::string excite_abort_reason_;
+    std::string excite_run_tag_;
+    double excite_achieved_rate_hz_ = 0.0;
+
+    // Cross-thread flags.
+    std::atomic<bool> excite_active_{false};
+    // Release/acquire gate: set true (release) by execute() only after excite_signal_
+    // and all EXCITE state are built, checked (acquire) at the top of the timer-side
+    // phase machine so a weakly-ordered CPU never runs it on half-published state.
+    std::atomic<bool> excite_ready_{false};
+    std::atomic<bool> excite_finished_{false};
+    std::atomic<bool> excite_abort_{false};
+    std::atomic<bool> excite_emergency_{false};
+    std::atomic<bool> excite_cancel_{false};
+    std::atomic<bool> excite_soft_stop_{false};
+    std::thread excite_thread_;
+
     // --- Speed controller ---
-    std::unique_ptr<SpeedController> global_speed_controller_;
+    // shared_ptr (not unique_ptr): the timer copies it into its CmdSnapshot under
+    // cmd_mutex_ and keeps the controller alive for the tick even if a service
+    // swaps/resets the member concurrently.
+    std::shared_ptr<SpeedController> global_speed_controller_;
+
+    // Local copy of the commanded state, taken under cmd_mutex_ once per timer
+    // tick (see publish_setpoint). FLIP runtime state (flip_phase_ etc.) is not
+    // copied: after the service hands it off it is only mutated on the timer.
+    struct CmdSnapshot {
+        SetpointType type = SetpointType::NONE;
+        std::shared_ptr<SpeedController> nav_controller;
+        px4_msgs::msg::TrajectorySetpoint last_pose;
+        bool altitude_override_set = false;
+        double altitude_override_z = 0.0;
+        std::string altitude_override_frame_id;
+        bool yaw_override_set = false;
+        double yaw_override = 0.0;
+        std::string yaw_override_frame_id;
+        bool yaw_rate_override_set = false;
+        double yaw_rate_override = 0.0;
+        double position_x = 0.0, position_y = 0.0, position_z = 0.0, position_yaw = 0.0;
+        std::string position_frame_id;
+        double velocity_vx = 0.0, velocity_vy = 0.0, velocity_vz = 0.0, velocity_yaw = 0.0;
+        std::string velocity_frame_id;
+        std::array<double, 3> trajectory_position{
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()};
+        std::array<double, 3> trajectory_velocity{
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()};
+        std::array<double, 3> trajectory_acceleration{
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()};
+        double trajectory_yaw = std::numeric_limits<double>::quiet_NaN();
+        double trajectory_yaw_rate = std::numeric_limits<double>::quiet_NaN();
+        std::string trajectory_frame_id;
+        // Feed-forward correction resolved for this tick (fresh == within timeout).
+        bool correction_fresh = false;
+        std::array<double, 3> correction_velocity{
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()};
+        std::array<double, 3> correction_acceleration{
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN()};
+        double correction_yaw_rate = std::numeric_limits<double>::quiet_NaN();
+        std::string correction_frame_id;
+        float attitude_roll = 0.0f, attitude_pitch = 0.0f, attitude_yaw = 0.0f, attitude_thrust = 0.5f;
+        std::string attitude_frame_id;
+        float rates_roll = 0.0f, rates_pitch = 0.0f, rates_yaw = 0.0f, rates_thrust = 0.5f;
+    };
+    CmdSnapshot snapshot_cmd_state();
 
     // --- Flags ---
-    bool busy_ = false;
+    // busy_ is written from the service group and the excitation handlers
+    // concurrently — atomic so the mutual-exclusion check is not a data race.
+    std::atomic<bool> busy_{false};
     bool wait_armed_ = false;
 
-    // Reference yaw at first odometry (so reported/display yaw is 0 at startup)
+    // Short-lock copies of the telemetry snapshot (see telemetry_mutex_).
+    CurrentPose snapshot_local_position();
+    px4_msgs::msg::VehicleStatus snapshot_vehicle_status(uint64_t * timestamp = nullptr);
+
+    // --- Telemetry streaming (prompt 96) ---
+    // Both the ~/telemetry topic and the ReceiveTelemetry action reuse
+    // build_telemetry(), the same code path as the get_telemetry service.
+    offboard_interfaces::msg::Telemetry build_telemetry(const std::string & requested_frame_id);
+    rclcpp::Publisher<offboard_interfaces::msg::Telemetry>::SharedPtr telemetry_publisher_;
+    rclcpp::TimerBase::SharedPtr telemetry_timer_;
+    rclcpp::CallbackGroup::SharedPtr telemetry_callback_group_;  // own group: never blocks setpoint_timer_
+    double telemetry_rate_hz_ = 0.0;  // 0 = topic disabled (default behavior unchanged)
+    void publish_telemetry();
+    void apply_telemetry_rate(double hz);
+    rcl_interfaces::msg::SetParametersResult on_parameters_set(
+        const std::vector<rclcpp::Parameter> & parameters);
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
+
+    using ReceiveTelemetry = offboard_interfaces::action::ReceiveTelemetry;
+    using TelemetryGoalHandle = rclcpp_action::ServerGoalHandle<ReceiveTelemetry>;
+    rclcpp_action::Server<ReceiveTelemetry>::SharedPtr receive_telemetry_action_server_;
+    std::atomic<bool> telemetry_stream_active_{false};
+    std::atomic<bool> telemetry_stream_stop_{false};
+    std::thread telemetry_stream_thread_;
+    rclcpp_action::GoalResponse handle_telemetry_goal(
+        const rclcpp_action::GoalUUID & uuid,
+        std::shared_ptr<const ReceiveTelemetry::Goal> goal);
+    rclcpp_action::CancelResponse handle_telemetry_cancel(
+        const std::shared_ptr<TelemetryGoalHandle> goal_handle);
+    void handle_telemetry_accepted(const std::shared_ptr<TelemetryGoalHandle> goal_handle);
+    void execute_telemetry_stream(const std::shared_ptr<TelemetryGoalHandle> goal_handle);
+
+    // --- Safe fallback (prompts 95/97/98/99/100 share this) ---
+    // Parks the drone: position-hold at the current pose, drops busy_.
+    void park_to_hold(const std::string & reason);
+
+    // --- RTL + failsafe policy (prompt 104) ---
+    // onboard_failsafe_action selects what the NODE-side critical fallbacks
+    // (freshness/geofence watchdogs, RC-loss) do: "hold" (default, park at the
+    // current pose), "land" or "rtl". Pilot takeover (kill-switch/stick) always
+    // releases the stream to PX4 instead — see failsafe_fallback().
+    std::string onboard_failsafe_action_ = "hold";
+    // Additive land relaxation: when true, the land service is also allowed
+    // from hold-like modes (AUTO.LOITER/POSCTL/ALTCTL), not only OFFBOARD.
+    bool land_from_hold_ = false;
+    rclcpp::Service<offboard_interfaces::srv::ReturnToLaunch>::SharedPtr return_to_launch_service_;
+    void return_to_launch_callback(
+        const offboard_interfaces::srv::ReturnToLaunch::Request::SharedPtr request,
+        const offboard_interfaces::srv::ReturnToLaunch::Response::SharedPtr response);
+    // Critical-rollback dispatcher: routes to park_to_hold / land / RTL
+    // according to onboard_failsafe_action.
+    void failsafe_fallback(const std::string & reason);
+
+    // --- Universal emergency stop (prompt 100) ---
+    // Global abort flag: checked by the CV waits in offboardAndArm so an
+    // emergency stop interrupts even an in-flight arm/offboard sequence.
+    std::atomic<bool> command_abort_{false};
+    rclcpp::Service<offboard_interfaces::srv::EmergencyStop>::SharedPtr emergency_stop_service_;
+    void emergency_stop_callback(
+        const offboard_interfaces::srv::EmergencyStop::Request::SharedPtr request,
+        const offboard_interfaces::srv::EmergencyStop::Response::SharedPtr response);
+
+    // --- Central setpoint validation (prompt 99) ---
+    // Numeric checks (NaN/Inf, speed limits) shared by navigate/NavigateTo/
+    // set_position/set_velocity. Absorbs the historical navigate checks verbatim.
+    bool validate_setpoint(SetpointType kind, double x, double y, double z,
+                           double speed, std::string & reason);
+    // Optional geofence gate for a position target given in `frame_id` (ENU).
+    // No-op (true) while geofence_enable=false.
+    bool validate_target_in_geofence(double x, double y, double z,
+                                     const std::string & frame_id, std::string & reason);
+
+    // --- NavigateTo action (prompt 97) ---
+    // Shared launch logic of the navigate service (thin wrapper) and the
+    // NavigateTo action. Throws std::runtime_error on failure; returns the
+    // controller driving this maneuver.
+    std::shared_ptr<SpeedController> start_navigate(
+        float x, float y, float z, float yaw, float speed,
+        const std::string & frame_id, bool auto_arm);
+    using NavigateTo = offboard_interfaces::action::NavigateTo;
+    using NavigateToGoalHandle = rclcpp_action::ServerGoalHandle<NavigateTo>;
+    rclcpp_action::Server<NavigateTo>::SharedPtr navigate_to_action_server_;
+    rclcpp::CallbackGroup::SharedPtr nav_callback_group_;
+    std::atomic<bool> nav_action_active_{false};
+    std::atomic<bool> nav_action_stop_{false};
+    std::thread nav_action_thread_;
+    // --- Diagnostics topic (prompt 101) ---
+    rclcpp::Publisher<offboard_interfaces::msg::OffboardStatus>::SharedPtr status_publisher_;
+    rclcpp::TimerBase::SharedPtr status_timer_;
+    void publish_status();
+
+    rclcpp_action::GoalResponse handle_navigate_to_goal(
+        const rclcpp_action::GoalUUID & uuid,
+        std::shared_ptr<const NavigateTo::Goal> goal);
+    rclcpp_action::CancelResponse handle_navigate_to_cancel(
+        const std::shared_ptr<NavigateToGoalHandle> goal_handle);
+    void handle_navigate_to_accepted(const std::shared_ptr<NavigateToGoalHandle> goal_handle);
+    void execute_navigate_to(const std::shared_ptr<NavigateToGoalHandle> goal_handle);
+
+    // Reference yaw at first odometry (so reported/display yaw is 0 at startup).
+    // Gated by zero_heading_at_start (default: true in sim, false on the real
+    // drone — the historical behavior). The offset applies ONLY to the
+    // displayed/telemetry yaw and logs; the control-side NED heading
+    // (current_local_position_.heading) always stays raw.
+    bool zero_heading_at_start_ = false;
     bool initial_heading_set_ = false;
     double initial_heading_ned_ = 0.0;
     static double normalizeYaw(double yaw);
@@ -562,6 +1037,7 @@ private:
     void Init_publishers(std::string px4_namespace);
     void Init_subscribers(std::string px4_namespace);
     void Init_services();
+    void Init_actions();
     void Init_timer();
     void Init_SpeedController(
         const Pose& start_pose_ned, 
@@ -579,6 +1055,20 @@ private:
     // --- Control ---
     void checkManualControl();
     bool offboardAndArm();
+    // Shared RC-interception check (kill-switch, RC-loss timeout, stick
+    // deflection) used by the control loop, offboardAndArm and the excitation
+    // abort. stick_thresh <= 0 disables the stick check. Returns true when the
+    // pilot demands control; `reason` is a short tag for logs.
+    bool rc_should_abort(std::string & reason, double stick_thresh);
+    // Parks the calling (service/worker) thread on arm_wait_cv_ until the
+    // vehicle status satisfies `predicate` or `timeout_s` expires — no polling
+    // loop, no setpoint publishing from the waiting thread.
+    bool wait_for_vehicle_state(
+        const std::function<bool(const px4_msgs::msg::VehicleStatus &)> & predicate,
+        double timeout_s);
+    // vehicleStatusCallback notifies this CV on every status update.
+    std::mutex arm_wait_mutex_;
+    std::condition_variable arm_wait_cv_;
 
     // --- PX4 commands ---
     void arm();
@@ -607,6 +1097,8 @@ private:
                                const offboard_interfaces::srv::SetYawRate::Response::SharedPtr response);
     void set_position_callback(const offboard_interfaces::srv::SetPosition::Request::SharedPtr request,
                                const offboard_interfaces::srv::SetPosition::Response::SharedPtr response);
+    void set_trajectory_callback(const offboard_interfaces::srv::SetTrajectory::Request::SharedPtr request,
+                                 const offboard_interfaces::srv::SetTrajectory::Response::SharedPtr response);
     void set_velocity_callback(const offboard_interfaces::srv::SetVelocity::Request::SharedPtr request,
                               const offboard_interfaces::srv::SetVelocity::Response::SharedPtr response);
     void set_attitude_callback(const offboard_interfaces::srv::SetAttitude::Request::SharedPtr request,
@@ -616,12 +1108,43 @@ private:
     void flip_callback(const offboard_interfaces::srv::Flip::Request::SharedPtr request,
                        const offboard_interfaces::srv::Flip::Response::SharedPtr response);
 
+    // --- Excitation action / service ---
+    using RunExcitation = offboard_interfaces::action::RunExcitation;
+    using ExciteGoalHandle = rclcpp_action::ServerGoalHandle<RunExcitation>;
+    rclcpp_action::GoalResponse handle_excite_goal(
+        const rclcpp_action::GoalUUID & uuid,
+        std::shared_ptr<const RunExcitation::Goal> goal);
+    rclcpp_action::CancelResponse handle_excite_cancel(
+        const std::shared_ptr<ExciteGoalHandle> goal_handle);
+    void handle_excite_accepted(const std::shared_ptr<ExciteGoalHandle> goal_handle);
+    void execute_excitation(const std::shared_ptr<ExciteGoalHandle> goal_handle);
+    void stop_excitation_callback(
+        const offboard_interfaces::srv::StopExcitation::Request::SharedPtr request,
+        const offboard_interfaces::srv::StopExcitation::Response::SharedPtr response);
+    // Timer-side phase machine + helpers.
+    void publish_excite_setpoint();
+    bool excite_compute_baseline(Eigen::Quaterniond & q_hover, float & thrust_cmd,
+                                 double & tilt_deg, double & drift_m);
+    void excite_publish_attitude(const Eigen::Quaterniond & q_ned, float thrust_cmd);
+    void excite_publish_rates(double wx, double wy, double wz, float thrust_cmd);
+    // settle_grace suppresses the attitude-transient aborts (runaway-rate, tilt)
+    // while the drone is still settling at the start of a goal — otherwise the
+    // residual motion from the previous goal's REVERT trips a false abort (P2-9).
+    bool excite_safety_ok(std::string & reason, bool settle_grace = false);
+    bool excite_is_stationary();  // rates + horizontal velocity below settle thresholds
+    bool excite_rc_abort();
+    void request_excite_abort(const std::string & reason, bool emergency);
+
     // --- Topic callbacks ---
     void batteryCallback(const px4_msgs::msg::BatteryStatus::SharedPtr msg);
     void manualControlCallback(const px4_msgs::msg::ManualControlSetpoint::SharedPtr msg);
     void vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr msg);
     void vehicleGlobalPosCallback(const px4_msgs::msg::VehicleGlobalPosition::SharedPtr msg);
     void vehicleOdomCallback(const px4_msgs::msg::VehicleOdometry::SharedPtr msg);
+    void vehicleAngularVelocityCallback(const px4_msgs::msg::VehicleAngularVelocity::SharedPtr msg);
+    void hoverThrustCallback(const px4_msgs::msg::HoverThrustEstimate::SharedPtr msg);
+    void landDetectedCallback(const px4_msgs::msg::VehicleLandDetected::SharedPtr msg);
+    void trajectoryCorrectionCallback(const offboard_interfaces::msg::TrajectoryCorrection::SharedPtr msg);
 
     // --- Main loop helpers ---
     void publish_setpoint();
