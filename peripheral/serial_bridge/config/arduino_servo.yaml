@@ -1,0 +1,13 @@
+serial_bridge:
+  ros__parameters:
+    port: /dev/ttyACM0
+    baudrate: 115200
+    min_angle_deg: 0.0
+    max_angle_deg: 180.0
+    center_angle_deg: 90.0
+    poll_rate_hz: 20.0
+    reconnect_interval_sec: 1.0
+    startup_delay_sec: 2.5
+    use_feedback: false
+    command_repeats: 3
+    command_repeat_delay_sec: 0.05
