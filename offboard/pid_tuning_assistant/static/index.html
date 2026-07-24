@@ -1,0 +1,2333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PID Tuning Assistant</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #1c1f26; --border: #2d3142;
+    --accent: #4c9be8; --green: #22c55e; --red: #ef4444;
+    --yellow: #eab308; --text: #e2e8f0; --muted: #64748b;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font);
+         font-size: 14px; min-height: 100vh; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border);
+           padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  .badge { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.rec  { background: var(--green);  color: #000; }
+  .badge.stop { background: var(--red);    color: #fff; }
+  .badge.idle { background: var(--muted);  color: #fff; }
+  .badge.warn { background: var(--yellow); color: #000; }
+  .main-grid { display: grid; grid-template-columns: 220px 1fr; gap: 0; height: calc(100vh - 49px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border);
+             padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  .sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+                color: var(--muted); margin-bottom: 4px; }
+  .content { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  button { padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer;
+           font-size: 13px; font-weight: 600; transition: opacity .15s; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary  { background: var(--accent); color: #fff; }
+  .btn-danger   { background: var(--red);    color: #fff; }
+  .btn-neutral  { background: var(--border); color: var(--text); }
+  .btn-sm       { padding: 5px 10px; font-size: 12px; }
+  .btn-lang     { padding: 4px 8px; font-size: 11px; background: transparent;
+                  border: 1px solid var(--border); color: var(--muted); cursor: pointer;
+                  border-radius: 4px; }
+  .btn-lang:hover { color: var(--text); border-color: var(--accent); }
+  input[type=text], input[type=file] {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 10px; color: var(--text); font-size: 13px; width: 100%; }
+  select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+           padding: 7px 10px; color: var(--text); font-size: 13px; width: 100%; }
+  .card { background: var(--surface); border: 1px solid var(--border);
+          border-radius: 10px; padding: 14px; }
+  .card h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--accent); }
+  .stat-row { display: flex; justify-content: space-between; align-items: center;
+              padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red   { color: var(--red);   }
+  .stat-val.yellow{ color: var(--yellow);}
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
+  .tab { padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent;
+         font-size: 13px; color: var(--muted); transition: color .15s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 6px 8px; background: var(--border);
+       color: var(--muted); font-weight: 600; position: sticky; top: 0; }
+  td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: #ffffff08; }
+  .warn-box { background: #422; border: 1px solid var(--red); border-radius: 8px;
+              padding: 10px 14px; font-size: 12px; color: #fca5a5; }
+  .info-box { background: #1a2233; border: 1px solid var(--accent); border-radius: 8px;
+              padding: 10px 14px; font-size: 12px; color: #93c5fd; }
+  .rec-param { font-family: monospace; font-size: 12px; color: var(--accent); }
+  .conf-high   { color: var(--green); }
+  .conf-medium { color: var(--yellow); }
+  .conf-low    { color: var(--muted); }
+  .topic-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .topic-active { background: var(--green); }
+  .topic-subscribed { background: var(--yellow); }
+  .topic-error { background: var(--red); }
+
+  /* VIO live-monitor fusion lamps */
+  .lamp { display:inline-block; width:11px; height:11px; border-radius:50%;
+          margin-right:6px; vertical-align:middle; background:var(--muted); }
+  .lamp.on { background: var(--green); }
+  .lamp.off { background: var(--red); }
+  .lamp.unknown { background: var(--muted); }
+  .lamp-item { font-size:12px; color: var(--text); }
+  .dl-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  #mode-indicator { font-size: 20px; font-weight: 700; color: var(--accent); }
+  #bat-bar { height: 8px; border-radius: 4px; background: var(--green);
+             transition: width .5s, background .5s; }
+  .disclaimer { font-size: 11px; color: var(--muted); border-top: 1px solid var(--border);
+                padding-top: 8px; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 data-i18n="title">PID Tuning Assistant</h1>
+  <span id="rec-badge" class="badge idle" data-i18n="idle">IDLE</span>
+  <span id="mode-indicator">—</span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <button class="btn-lang" onclick="switchLang()" data-i18n="lang_btn">RU</button>
+    <span style="font-size:12px;color:var(--muted)" data-i18n="bat_label">BAT</span>
+    <div style="width:60px;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+      <div id="bat-bar" style="width:0%"></div>
+    </div>
+    <span id="bat-pct" style="font-size:12px;font-variant-numeric:tabular-nums">?%</span>
+  </div>
+</header>
+
+<div class="main-grid">
+<!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+<aside class="sidebar">
+
+  <div>
+    <h2 data-i18n="source_label">Source</h2>
+    <select id="source-sel" onchange="switchSource(this.value)" style="margin-bottom:8px">
+      <option value="dds" data-i18n="source_dds">DDS (live)</option>
+      <option value="ulog" data-i18n="source_ulog">ULog (file)</option>
+    </select>
+    <!-- DDS recording controls -->
+    <div id="dds-panel">
+      <input type="text" id="run-name" data-i18n-placeholder="run_name_placeholder" placeholder="Run name (optional)"/>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button class="btn-primary" id="btn-start" onclick="startRec()" data-i18n="start">▶ Start</button>
+        <button class="btn-danger"  id="btn-stop"  onclick="stopRec()" disabled data-i18n="stop">■ Stop</button>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+        <span data-i18n="frames_label">Frames</span>: <span id="frame-count">0</span> &nbsp;|&nbsp;
+        <span data-i18n="time_label">Time</span>: <span id="elapsed">0s</span>
+      </div>
+    </div>
+    <!-- ULog upload controls -->
+    <div id="ulog-panel" style="display:none">
+      <input type="file" id="ulog-file" accept=".ulg" style="margin-bottom:6px"/>
+      <button class="btn-primary btn-sm" id="btn-ulog-upload"
+              style="width:100%" onclick="uploadUlog()" data-i18n="ulog_upload">
+        ⬆ Upload &amp; Analyse
+      </button>
+      <div id="ulog-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+    </div>
+  </div>
+
+  <div>
+    <h2 data-i18n="axis_view">Axis View</h2>
+    <select id="axis-sel" onchange="switchAxis(this.value)">
+      <option value="roll" data-i18n="axis_roll">Roll</option>
+      <option value="pitch" data-i18n="axis_pitch">Pitch</option>
+      <option value="yaw" data-i18n="axis_yaw">Yaw</option>
+    </select>
+  </div>
+
+  <div>
+    <h2 data-i18n="loop_view">Loop View</h2>
+    <select id="loop-sel" onchange="switchLoop(this.value)">
+      <option value="rate" data-i18n="loop_rate">Rate loop</option>
+      <option value="attitude" data-i18n="loop_attitude">Attitude loop</option>
+    </select>
+  </div>
+
+  <div>
+    <h2 data-i18n="load_params">Load .params</h2>
+    <input type="file" id="params-file" accept=".params,.txt"/>
+    <button class="btn-neutral btn-sm" style="margin-top:6px;width:100%"
+            onclick="uploadParams()" data-i18n="upload_file">Upload file</button>
+    <button class="btn-neutral btn-sm" id="btn-fetch-live"
+            style="margin-top:4px;width:100%;background:var(--accent-dim)"
+            onclick="fetchParamsLive()" data-i18n="fetch_drone">Fetch from drone (~15 s)</button>
+    <div id="params-status" style="font-size:11px;color:var(--muted);margin-top:4px;"></div>
+  </div>
+
+  <div>
+    <h2 data-i18n="api_token_label">API token</h2>
+    <input type="password" id="api-token" autocomplete="off"
+           data-i18n-placeholder="api_token_placeholder"
+           placeholder="Bearer token (if server requires one)"
+           oninput="onTokenInput(this.value)" style="width:100%"/>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px" data-i18n="api_token_hint">
+      Stored in this browser. Required only if the server was started with a token.
+    </div>
+  </div>
+
+  <div>
+    <h2 data-i18n="topics">Topics</h2>
+    <div id="topic-list" style="font-size:11px;display:flex;flex-direction:column;gap:3px;"></div>
+  </div>
+
+  <div class="disclaimer" data-i18n="disclaimer">
+    ⚠ Read-only. Recommendations are heuristic starting points.
+    Change one parameter at a time. Test in SITL first.
+  </div>
+
+</aside>
+
+<!-- ── MAIN CONTENT ─────────────────────────────────────────────────────── -->
+<main class="content">
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('live')" data-i18n="tab_live">Live</div>
+    <div class="tab" onclick="switchTab('analysis')" data-i18n="tab_analysis">Analysis</div>
+    <div class="tab" onclick="switchTab('aid')" data-i18n="tab_aid">EKF2 aid sources</div>
+    <div class="tab" onclick="switchTab('history')" data-i18n="tab_history">History</div>
+  </div>
+
+  <!-- ── LIVE TAB ─────────────────────────────────────────────────── -->
+  <div id="tab-live" class="tab-content active">
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 id="plot-title" style="margin-bottom:0">Rate Loop — Roll</h3>
+        <button class="btn-neutral btn-sm" onclick="cleanGraphs()" data-i18n="clean">Clean</button>
+      </div>
+      <div id="plot-rate" style="height:260px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="control_output">Control Output (torque)</h3>
+      <div id="plot-ctrl" style="height:160px;"></div>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="motor_commands">Motor Commands</h3>
+      <div id="plot-motors" style="height:140px;"></div>
+    </div>
+
+    <!-- ── VIO / EV live monitor (DDS watchdog) ──────────── -->
+    <div class="card" id="vio-live-card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3 style="margin-bottom:0" data-i18n="vio_live_title">VIO / EV Live Monitor (DDS)</h3>
+        <span id="vio-live-verdict" class="badge idle">—</span>
+      </div>
+      <div class="info-box" style="font-size:11px;margin-top:8px" data-i18n="vio_live_banner">
+        Live DDS shows fusion flags + EV rate/latency only. Numeric innovation
+        consistency and the EKF2_EV_DELAY estimate live in the offline ULog tab.
+      </div>
+      <div id="vio-live-dr" class="warn-box" style="display:none;font-weight:600"
+           data-i18n="vio_live_dr_alarm">⚠ COASTING — inertial dead reckoning (no absolute EV fix)</div>
+      <div id="vio-live-lamps" style="display:flex;flex-wrap:wrap;gap:14px;margin:10px 0"></div>
+      <div id="vio-live-metrics" style="display:flex;flex-wrap:wrap;gap:18px;font-size:12px"></div>
+      <div id="vio-live-reasons" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px" data-i18n="vio_live_source_note">
+        Source-agnostic EV monitor (ArUco/VPE, 3D lidar odometry, 2D scan-match, camera VIO, mocap).
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ANALYSIS TAB ─────────────────────────────────────────────── -->
+  <div id="tab-analysis" class="tab-content">
+
+    <div id="warn-container"></div>
+
+    <!-- Data Quality panel -->
+    <div class="card" id="dq-card" style="display:none">
+      <h3 data-i18n="dq_title">Data Quality</h3>
+      <div id="dq-overview" style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:10px;font-size:13px;"></div>
+      <div id="dq-table-wrap"></div>
+      <div id="dq-notes" style="margin-top:8px;font-size:11px;color:var(--muted);"></div>
+    </div>
+
+    <div class="card">
+      <h3><span data-i18n="recommendations">Recommendations</span>
+        <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px"
+              data-i18n="heuristic_note">heuristic — verify each change in SITL</span>
+      </h3>
+      <div id="rec-table-wrap">
+        <div class="info-box" data-i18n="record_flight_prompt">Record a flight and click Stop to generate analysis.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="step_metrics">Step-Response Metrics (per mode × axis)</h3>
+      <div id="metrics-table-wrap">
+        <div class="info-box" data-i18n="no_data">No data yet.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3><span data-i18n="step_events">Step Events</span> — <span id="step-axis-label">Roll / Rate</span></h3>
+      <div id="plot-step" style="height:220px;"></div>
+    </div>
+
+    <!-- ── HiFi panels (ULog only) ─────────────────────────────────── -->
+    <div id="hifi-section" style="display:none">
+
+      <!-- Capability badges -->
+      <div class="card" id="caps-card">
+        <h3 data-i18n="caps_title">Algorithms Active</h3>
+        <div id="caps-badges" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;"></div>
+        <div id="excitation-info" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      </div>
+
+      <!-- Bode plots -->
+      <div class="card" id="bode-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="margin-bottom:0" data-i18n="bode_title">Bode — Rate Loop</h3>
+          <select id="bode-axis-sel" onchange="renderBode(bode_axis_sel.value)" style="width:auto;padding:4px 8px">
+            <option value="roll">Roll</option>
+            <option value="pitch">Pitch</option>
+            <option value="yaw">Yaw</option>
+          </select>
+        </div>
+        <div id="plot-bode-mag"   style="height:180px;"></div>
+        <div id="plot-bode-phase" style="height:150px;"></div>
+        <div id="margins-row" style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;font-size:12px;"></div>
+      </div>
+
+      <!-- Vibration spectrum -->
+      <div class="card" id="vibe-card">
+        <h3 data-i18n="vibe_title">Vibration Spectrum (raw gyro Z)</h3>
+        <div id="plot-vibe" style="height:200px;"></div>
+        <div id="vibe-peaks" style="margin-top:8px;font-size:11px;"></div>
+      </div>
+
+      <!-- Before / After simulation -->
+      <div class="card" id="sim-card">
+        <h3 data-i18n="sim_title">Predicted Step Response (Before / After)</h3>
+        <div id="plot-sim" style="height:220px;"></div>
+        <div id="sim-metrics" style="display:flex;gap:24px;flex-wrap:wrap;margin-top:8px;font-size:12px;"></div>
+        <div id="synth-gains" style="margin-top:8px;font-size:11px;color:var(--muted)"></div>
+      </div>
+
+      <!-- Loop delays -->
+      <div class="card" id="delay-card">
+        <h3 data-i18n="delay_title">Loop Delay</h3>
+        <div id="delay-table"></div>
+      </div>
+
+      <!-- Offline PX4 autotune (ARX + GMVC) -->
+      <div class="card" id="autotune-card" style="display:none">
+        <h3 data-i18n="autotune_title">Autotune (PX4 method)</h3>
+        <div id="autotune-note" style="font-size:12px;color:var(--muted);margin-bottom:8px"
+             data-i18n="autotune_note">
+          Offline reproduction of the onboard PX4 autotune (ARX(2,2,1) identification +
+          GMVC synthesis). Read-only — apply the suggested gains manually or via QGC.
+        </div>
+        <div id="autotune-axes"></div>
+      </div>
+
+    </div>
+    <!-- ── End HiFi ───────────────────────────────────────────────── -->
+
+    <!-- ── VIO / EV (external-vision) panels (ULog only) ──── -->
+    <div id="vio-section" style="display:none">
+
+      <div class="card">
+        <h3 data-i18n="vio_title">VIO / EV — External-Vision Fusion</h3>
+        <div id="vio-caps" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;margin-bottom:6px"></div>
+        <div id="vio-aidsrc-warn" style="font-size:11px;color:var(--yellow)"></div>
+        <div id="vio-source-note" style="font-size:11px;color:var(--muted);margin-top:6px"
+             data-i18n="vio_source_note">
+          Source-agnostic: analyses whatever EKF2 fuses as EV (ArUco/VPE, 3D lidar
+          odometry, 2D scan-match, camera VIO, mocap).
+        </div>
+      </div>
+
+      <!-- Test-ratio table -->
+      <div class="card" id="vio-tr-card">
+        <h3 data-i18n="vio_tr_title">Innovation Test-Ratios (per axis)</h3>
+        <div id="vio-tr-table"></div>
+      </div>
+
+      <!-- Innovation bias + ev_pos_bias plot -->
+      <div class="card" id="vio-bias-card">
+        <h3 data-i18n="vio_bias_title">Innovation Bias &amp; EKF EV-Position Bias</h3>
+        <div id="plot-vio-bias" style="height:200px;"></div>
+        <div id="vio-bias-table" style="margin-top:8px;font-size:11px;"></div>
+      </div>
+
+      <!-- Fusion dropout timeline -->
+      <div class="card" id="vio-dropout-card">
+        <h3 data-i18n="vio_dropout_title">EV Fusion Dropouts / Coasting</h3>
+        <div id="plot-vio-dropout" style="height:120px;"></div>
+        <div id="vio-dropout-summary" style="margin-top:8px;font-size:12px;"></div>
+      </div>
+
+      <!-- EV_DELAY estimate + rate/latency -->
+      <div class="card" id="vio-delay-card">
+        <h3 data-i18n="vio_delay_title">EKF2_EV_DELAY Estimate</h3>
+        <div id="vio-delay-body" style="font-size:12px;"></div>
+        <div id="vio-rate-body" style="font-size:12px;margin-top:8px;"></div>
+      </div>
+
+      <!-- EKF2_EV_* recommendations -->
+      <div class="card" id="vio-recs-card">
+        <h3 data-i18n="vio_recs_title">EKF2_EV_* Recommendations</h3>
+        <div id="vio-recs-table"></div>
+      </div>
+
+    </div>
+    <!-- ── End VIO / EV ───────────────────────────────────────────── -->
+
+    <div class="card">
+      <h3 data-i18n="downloads">Downloads</h3>
+      <div class="dl-row">
+        <button class="btn-neutral btn-sm" onclick="dl('json')" data-i18n="dl_json">⬇ JSON (ML)</button>
+        <button class="btn-neutral btn-sm" onclick="dl('csv')" data-i18n="dl_csv">⬇ CSV</button>
+        <button class="btn-neutral btn-sm" onclick="dl('parquet')" data-i18n="dl_parquet">⬇ Parquet</button>
+        <button class="btn-neutral btn-sm" onclick="dl('prompt')" data-i18n="dl_llm">⬇ LLM Prompt</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── EKF2 AID SOURCES TAB (ULog only) ───────────────── -->
+  <div id="tab-aid" class="tab-content">
+    <div id="aid-unavailable" class="info-box" data-i18n="aid_unavailable">
+      Upload a .ulg with estimator topics to see EKF2 aid-source diagnostics.
+    </div>
+
+    <div id="aid-body" style="display:none">
+      <!-- Top-level coasting / fake_pos alarm (spans all sources) -->
+      <div id="aid-coasting" class="warn-box" style="display:none;font-weight:600"></div>
+
+      <div class="card">
+        <h3 data-i18n="aid_title">EKF2 Aid Sources</h3>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px" data-i18n="aid_intro">
+          One metric machine over every EKF2 aid source. External vision is one source among optical flow, range height, GPS, baro and mag.
+        </div>
+        <div id="aid-caps" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;margin-bottom:6px"></div>
+        <div id="aid-topics" style="font-size:11px;color:var(--muted)"></div>
+        <div id="aid-hint" style="font-size:11px;color:var(--yellow);margin-top:6px" data-i18n="aid_logger_hint">
+          For per-source delay/NEES, enable estimator_aid_src_&lt;src&gt; in logger_topics.txt — the default log carries no aid_src topics.
+        </div>
+        <!-- Source selector -->
+        <div id="aid-selector" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
+      </div>
+
+      <!-- Selected-source detail -->
+      <div id="aid-detail"></div>
+    </div>
+  </div>
+
+  <!-- ── HISTORY TAB ───────────────────────────────────────────────── -->
+  <div id="tab-history" class="tab-content">
+    <div class="card">
+      <h3 data-i18n="run_history">Run History</h3>
+      <div id="history-list">
+        <div class="info-box" data-i18n="no_runs">No runs recorded in this session.</div>
+      </div>
+    </div>
+
+    <div class="card" id="compare-card" style="display:none">
+      <h3 data-i18n="compare_title">Compare Two Runs</h3>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px" data-i18n="compare_run_a">Run A</div>
+          <select id="cmp-run-a" style="min-width:160px"></select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px" data-i18n="compare_run_b">Run B</div>
+          <select id="cmp-run-b" style="min-width:160px"></select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px" data-i18n="compare_signal">Signal</div>
+          <select id="cmp-signal" style="min-width:160px">
+            <option value="roll_rate" data-i18n="sig_roll_rate">Roll rate (meas)</option>
+            <option value="roll_rate_sp" data-i18n="sig_roll_rate_sp">Roll rate SP</option>
+            <option value="pitch_rate" data-i18n="sig_pitch_rate">Pitch rate (meas)</option>
+            <option value="pitch_rate_sp" data-i18n="sig_pitch_rate_sp">Pitch rate SP</option>
+            <option value="yaw_rate" data-i18n="sig_yaw_rate">Yaw rate (meas)</option>
+            <option value="roll" data-i18n="sig_roll">Roll attitude (meas)</option>
+            <option value="pitch" data-i18n="sig_pitch">Pitch attitude (meas)</option>
+            <option value="torque_roll" data-i18n="sig_torque_roll">Torque roll</option>
+            <option value="torque_pitch" data-i18n="sig_torque_pitch">Torque pitch</option>
+            <option value="m0" data-i18n="sig_m0">Motor 0</option>
+          </select>
+        </div>
+        <button class="btn-primary btn-sm" onclick="runComparison()" data-i18n="compare_btn">Compare</button>
+      </div>
+      <div id="plot-compare" style="height:280px;"></div>
+      <div id="compare-status" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ── TRANSLATIONS ───────────────────────────────────────────────────────────────
+const TR = {
+  en: {
+    title: "PID Tuning Assistant",
+    lang_btn: "RU",
+    idle: "IDLE",
+    rec: "● REC",
+    bat_label: "BAT",
+    recording: "Recording",
+    run_name_placeholder: "Run name (optional)",
+    api_token_label: "API token",
+    api_token_placeholder: "Bearer token (if server requires one)",
+    api_token_hint: "Stored in this browser. Required only if the server was started with a token.",
+    start: "▶ Start",
+    stop: "■ Stop",
+    frames_label: "Frames",
+    time_label: "Time",
+    axis_view: "Axis View",
+    axis_roll: "Roll",
+    axis_pitch: "Pitch",
+    axis_yaw: "Yaw",
+    loop_view: "Loop View",
+    loop_rate: "Rate loop",
+    loop_attitude: "Attitude loop",
+    loop_rate_short: "Rate",
+    loop_attitude_short: "Attitude",
+    load_params: "Load .params",
+    upload_file: "Upload file",
+    fetch_drone: "Fetch from drone (~15 s)",
+    topics: "Topics",
+    disclaimer: "⚠ Read-only. Recommendations are heuristic starting points.\nChange one parameter at a time. Test in SITL first.",
+    tab_live: "Live",
+    tab_analysis: "Analysis",
+    tab_history: "History",
+    clean: "Clean",
+    control_output: "Control Output (torque)",
+    motor_commands: "Motor Commands",
+    trace_setpoint: "setpoint",
+    trace_measured: "measured",
+    trace_torque: "torque",
+    trace_response: "response (schematic)",
+    recommendations: "Recommendations",
+    heuristic_note: "heuristic — verify each change in SITL",
+    record_flight_prompt: "Record a flight and click Stop to generate analysis.",
+    step_metrics: "Step-Response Metrics (per mode × axis)",
+    no_data: "No data yet.",
+    no_step_data: "No step data",
+    step_events: "Step Events",
+    downloads: "Downloads",
+    dl_llm: "⬇ LLM Prompt",
+    dl_json: "⬇ JSON (ML)",
+    dl_csv: "⬇ CSV",
+    dl_parquet: "⬇ Parquet",
+    warnings_header: "⚠ Warnings",
+    no_recs: "No recommendations generated.",
+    no_segments: "No segments.",
+    th_axis: "Axis",
+    th_param: "Param",
+    th_current: "Current",
+    th_suggested: "Suggested",
+    th_delta: "Δ%",
+    th_direction: "Direction",
+    th_confidence: "Confidence",
+    th_reason: "Reason",
+    th_mode: "Mode",
+    th_loop: "Loop",
+    th_events: "#Events",
+    th_overshoot: "Overshoot %",
+    th_rise: "Rise (s)",
+    th_settle: "Settle (s)",
+    th_rms: "RMS err",
+    th_dom_freq: "Dom freq Hz",
+    th_noise: "Noise RMS",
+    th_coh: "Coherence",
+    th_r2: "Model R²",
+    dq_title: "Data Quality",
+    dq_rate: "Sample rate",
+    dq_nyquist: "Nyquist",
+    dq_jitter: "Jitter",
+    dq_drops: "Drops",
+    dq_confidence: "Confidence",
+    dq_spectral: "Spectral analysis",
+    dq_ok: "OK",
+    dq_limited: "limited (low rate)",
+    dq_topic: "Topic",
+    dq_msgs: "Messages",
+    dq_achieved: "Rate (Hz)",
+    dq_nyq_col: "f_nyq (Hz)",
+    dq_jitter_col: "Jitter (ms)",
+    dq_drop_col: "Drops %",
+    dir_increase: "increase",
+    dir_decrease: "decrease",
+    dir_info: "info",
+    conf_high: "high",
+    conf_medium: "medium",
+    conf_low: "low",
+    analysis_disclaimer: "⚠ Heuristic estimates only. Change one parameter at a time. Validate in SITL (Gazebo) before real flight.\nThese recommendations do NOT account for airframe-specific dynamics. Use at your own risk.",
+    run_history: "Run History",
+    no_runs: "No runs recorded in this session.",
+    th_run: "Run",
+    th_timestamp: "Timestamp",
+    th_frames: "Frames",
+    th_recs: "Recs",
+    compare_title: "Compare Two Runs",
+    compare_run_a: "Run A",
+    compare_run_b: "Run B",
+    compare_signal: "Signal",
+    compare_btn: "Compare",
+    select_runs: "Select runs and click Compare",
+    select_diff_runs: "⚠ Select two different runs.",
+    compare_loading: "Loading…",
+    sig_roll_rate: "Roll rate (meas)",
+    sig_roll_rate_sp: "Roll rate SP",
+    sig_pitch_rate: "Pitch rate (meas)",
+    sig_pitch_rate_sp: "Pitch rate SP",
+    sig_yaw_rate: "Yaw rate (meas)",
+    sig_roll: "Roll attitude (meas)",
+    sig_pitch: "Pitch attitude (meas)",
+    sig_torque_roll: "Torque roll",
+    sig_torque_pitch: "Torque pitch",
+    sig_m0: "Motor 0",
+    cmp_samples: "Showing {0} + {1} samples",
+    cmp_error: "Error: {0}",
+    cmp_title: "Signal: {0}  (t=0 aligned)",
+    uploaded: "✓ Loaded {0} PID params",
+    uploaded_from_drone: "✓ Loaded {0} PID params from drone",
+    upload_fail: "✗ {0}",
+    network_error: "✗ Network error: {0}",
+    fetching_text: "Fetching… (~15 s)",
+    connecting_text: "Connecting to fmu_control…",
+    overshoot_fmt: "Overshoot {0}% | Rise {1}s | Settle {2}s | Freq {3}Hz",
+    loop_label_rate: "Rate Loop",
+    loop_label_attitude: "Attitude Loop",
+    rate_loop_of: "Rate Loop — {0}",
+    attitude_loop_of: "Attitude Loop — {0}",
+    roll: "Roll",
+    pitch: "Pitch",
+    yaw: "Yaw",
+    source_label: "Source",
+    source_dds: "DDS (live)",
+    source_ulog: "ULog (file)",
+    ulog_upload: "⬆ Upload & Analyse",
+    ulog_uploading: "Parsing… (may take a few seconds)",
+    ulog_ok: "✓ {0} frames, {1} s, {2} recs",
+    ulog_fail: "✗ {0}",
+    caps_title: "Algorithms Active",
+    cap_frf: "FRF",
+    frf_unbiased: "reference-based (unbiased)",
+    frf_biased: "setpoint-based (closed-loop biased)",
+    cap_margins: "Margins",
+    cap_vibe: "Vibration",
+    cap_delay: "Loop Delay",
+    cap_plant: "Plant ID",
+    cap_arx: "ARX",
+    cap_filter: "Filter char.",
+    cap_off: "off",
+    excitation_label: "Excitation",
+    bode_title: "Bode — Rate Loop",
+    bode_mag: "Magnitude (dB)",
+    bode_phase: "Phase (°)",
+    bode_coherence: "Coherence",
+    margins_gm: "GM",
+    margins_pm: "PM",
+    margins_gc: "Crossover",
+    margins_conf: "Conf",
+    margins_note: "note",
+    vibe_title: "Vibration Spectrum (raw gyro Z)",
+    vibe_peak_hz: "Peak Hz",
+    vibe_amp: "Amp dB",
+    vibe_harmonic: "Motor harmonic",
+    vibe_filter: "Filter suggestion",
+    sim_title: "Predicted Step Response (Before / After)",
+    sim_before: "Before (current gains)",
+    sim_after: "After (suggested gains)",
+    sim_overshoot: "Overshoot",
+    sim_rise: "Rise time",
+    sim_settle: "Settling",
+    synth_gains_label: "Suggested gains",
+    delay_title: "Loop Delay",
+    delay_axis: "Axis",
+    delay_ms: "Delay (ms)",
+    delay_method: "Method",
+    delay_conf: "Conf",
+    autotune_title: "Autotune (PX4 method)",
+    autotune_note: "Offline reproduction of the onboard PX4 autotune (ARX(2,2,1) identification + GMVC synthesis). Read-only — apply the suggested gains manually or via QGC.",
+    autotune_param: "Parameter",
+    autotune_current: "Current",
+    autotune_suggested: "Suggested",
+    autotune_gate_ok: "sanity gate passed",
+    autotune_rejected: "rejected",
+    vio_title: "VIO / EV — Внешняя одометрия (EN: External-Vision Fusion)",
+    vio_source_note: "Source-agnostic: analyses whatever EKF2 fuses as EV (ArUco/VPE, 3D lidar odometry, 2D scan-match, camera VIO, mocap).",
+    vio_tr_title: "Innovation Test-Ratios (per axis)",
+    vio_bias_title: "Innovation Bias & EKF EV-Position Bias",
+    vio_dropout_title: "EV Fusion Dropouts / Coasting",
+    vio_delay_title: "EKF2_EV_DELAY Estimate",
+    vio_recs_title: "EKF2_EV_* Recommendations",
+    vio_tr_axis: "Axis",
+    vio_tr_mean: "Mean",
+    vio_tr_p95: "p95",
+    vio_tr_over1: "% > 1 (rejected)",
+    vio_tr_n: "N",
+    vio_bias_axis: "Axis",
+    vio_bias_mean: "Mean innov (m)",
+    vio_bias_corr: "Speed corr",
+    vio_bias_class: "Likely cause",
+    vio_class_delay: "delay",
+    vio_class_extrinsic: "extrinsic",
+    vio_class_none: "none",
+    vio_drop_n: "Dropout intervals",
+    vio_drop_total: "Total duration",
+    vio_drop_max: "Max interval",
+    vio_drop_coast: "Coasting/const-pos",
+    vio_delay_est: "Estimated delay",
+    vio_delay_r2: "Correlation R²",
+    vio_delay_dyn: "Dynamics",
+    vio_delay_not_estimable: "Not estimable — no high-rate EV source. Add estimator_aid_src_ev_* / vehicle_visual_odometry via logger_topics.txt.",
+    vio_rate: "EV rate",
+    vio_latency: "Latency (median/p95)",
+    vio_no_aidsrc: "No estimator_aid_src_ev_* in this log — add a logger_topics.txt for full analysis and EV_DELAY estimation.",
+    vio_rec_param: "Parameter",
+    vio_rec_current: "Current",
+    vio_rec_suggested: "Suggested",
+    vio_topics_found: "Topics found",
+    vio_live_title: "VIO / EV Live Monitor (DDS)",
+    vio_live_banner: "Live over DDS shows fusion flags + EV rate/latency. Numeric innovation consistency and the EKF2_EV_DELAY estimate are ULog-only — see the offline VIO/EV tab.",
+    vio_live_source_note: "Source-agnostic EV monitor (ArUco/VPE, 3D lidar odometry, 2D scan-match, camera VIO, mocap).",
+    vio_live_dr_alarm: "⚠ COASTING — inertial dead reckoning (no absolute EV fix)",
+    vio_live_verdict_ok: "OK",
+    vio_live_verdict_warn: "WARN",
+    vio_live_verdict_crit: "CRIT",
+    vio_live_verdict_unavailable: "N/A",
+    vio_live_flag_pos: "EV pos",
+    vio_live_flag_yaw: "EV yaw",
+    vio_live_flag_hgt: "EV hgt",
+    vio_live_flag_vel: "EV vel",
+    vio_live_source: "Source",
+    vio_live_rate: "EV rate",
+    vio_live_latency: "Latency",
+    vio_live_quality: "Quality",
+    vio_live_reset: "Reset counter",
+    vio_live_age: "Last input age",
+    vio_live_divergence: "EV↔EKF divergence",
+    vio_live_rejects: "Rejects (hpos/vpos/yaw)",
+    vio_live_expected: "expected",
+    vio_live_reason_coasting: "Filter is coasting (inertial dead reckoning)",
+    vio_live_reason_ev_input_silent: "EV input silent (no messages within timeout)",
+    vio_live_reason_ev_pos_not_fused_airborne: "EV position not fused while armed",
+    vio_live_reason_ev_pos_not_fused: "EV position not fused (on ground)",
+    vio_live_reason_ev_yaw_not_fused: "EV yaw not fused while armed",
+    vio_live_reason_low_rate: "EV rate below 0.5× expected",
+    vio_live_reason_high_rate: "EV rate above 1.5× expected",
+    vio_live_reason_high_latency: "EV latency above 100 ms",
+    vio_live_reason_reject_active: "Innovation reject active",
+    vio_live_reason_no_vio_topics: "No VIO/EV topics available",
+    // ── EKF2 aid sources tab ──────────────────────────────
+    tab_aid: "EKF2 aid sources",
+    aid_unavailable: "Upload a .ulg with estimator topics to see EKF2 aid-source diagnostics.",
+    aid_title: "EKF2 Aid Sources",
+    aid_intro: "One metric machine over every EKF2 aid source. External vision is one source among optical flow, range height, GPS, baro and mag.",
+    aid_logger_hint: "For per-source delay/NEES, enable estimator_aid_src_<src> in logger_topics.txt — the default log carries no aid_src topics.",
+    aid_active: "active",
+    aid_inactive: "inactive",
+    aid_present_label: "Topics found",
+    aid_coasting_msg: "ALL odometry lost — fake_position / inertial dead-reckoning {0}% of the log. The EKF is coasting on inertial only.",
+    aid_tr_title: "Innovation Test-Ratios (per axis)",
+    aid_bias_title: "Innovation Bias (delay vs extrinsic)",
+    aid_drop_title: "Fusion Dropouts / Rejections",
+    aid_delay_title: "Delay / Consistency / Rate",
+    aid_recs_title: "Recommendations",
+    aid_axis: "Axis", aid_mean: "Mean", aid_p95: "p95",
+    aid_over1: "% > 1 (rejected)", aid_n: "N",
+    aid_bias_mean: "Mean innov (m)", aid_bias_corr: "Speed corr", aid_bias_class: "Likely cause",
+    aid_class_delay: "delay", aid_class_extrinsic: "extrinsic", aid_class_none: "none",
+    aid_drop_n: "Intervals", aid_drop_total: "Total", aid_drop_max: "Max",
+    aid_delay_est: "Delay est", aid_delay_r2: "R²", aid_delay_not: "Delay not estimable (needs aid_src topic).",
+    aid_nees_label: "NEES", aid_nees_none: "No NEES (needs aid_src topic in log).",
+    aid_rate_label: "aid_src rate",
+    aid_rec_param: "Parameter", aid_rec_current: "Current", aid_rec_suggested: "Suggested",
+    aid_no_recs: "No recommendations.",
+    aid_inactive_banner: "Source inactive — {0}. No recommendations.",
+    aid_ctrl_label: "CTRL",
+  },
+  ru: {
+    title: "PID Ассистент",
+    lang_btn: "EN",
+    idle: "ОЖИДАНИЕ",
+    rec: "● ЗАПИСЬ",
+    bat_label: "БАТ",
+    recording: "Запись",
+    run_name_placeholder: "Имя запуска (необязательно)",
+    api_token_label: "API-токен",
+    api_token_placeholder: "Bearer-токен (если сервер требует)",
+    api_token_hint: "Хранится в этом браузере. Нужен только если сервер запущен с токеном.",
+    start: "▶ Старт",
+    stop: "■ Стоп",
+    frames_label: "Кадров",
+    time_label: "Время",
+    axis_view: "Ось",
+    axis_roll: "Крен",
+    axis_pitch: "Тангаж",
+    axis_yaw: "Рыскание",
+    loop_view: "Контур",
+    loop_rate: "Контур скорости",
+    loop_attitude: "Контур углов",
+    loop_rate_short: "Скорость",
+    loop_attitude_short: "Углы",
+    load_params: "Загрузить .params",
+    upload_file: "Загрузить файл",
+    fetch_drone: "Загрузить с дрона (~15 с)",
+    topics: "Топики",
+    disclaimer: "⚠ Только чтение. Рекомендации — эвристические оценки.\nМеняйте по одному параметру. Сначала тестируйте в SITL.",
+    tab_live: "Графики",
+    tab_analysis: "Анализ",
+    tab_history: "История",
+    clean: "Очистить",
+    control_output: "Управление (момент)",
+    motor_commands: "Команды моторов",
+    trace_setpoint: "уставка",
+    trace_measured: "измерение",
+    trace_torque: "момент",
+    trace_response: "отклик (схема)",
+    recommendations: "Рекомендации",
+    heuristic_note: "эвристика — проверяйте изменения в SITL",
+    record_flight_prompt: "Запишите полёт и нажмите Стоп для анализа.",
+    step_metrics: "Метрики отклика (режим × ось)",
+    no_data: "Нет данных.",
+    no_step_data: "Нет данных",
+    step_events: "События ступенек",
+    downloads: "Скачать",
+    dl_llm: "⬇ LLM промпт",
+    dl_json: "⬇ JSON (ML)",
+    dl_csv: "⬇ CSV",
+    dl_parquet: "⬇ Parquet",
+    warnings_header: "⚠ Предупреждения",
+    no_recs: "Рекомендаций нет.",
+    no_segments: "Сегментов нет.",
+    th_axis: "Ось",
+    th_param: "Параметр",
+    th_current: "Текущее",
+    th_suggested: "Совет",
+    th_delta: "Δ%",
+    th_direction: "Направление",
+    th_confidence: "Уверенность",
+    th_reason: "Причина",
+    th_mode: "Режим",
+    th_loop: "Контур",
+    th_events: "#Событий",
+    th_overshoot: "Перерегул. %",
+    th_rise: "Нараст. (с)",
+    th_settle: "Устан. (с)",
+    th_rms: "СКО",
+    th_dom_freq: "Дом. ч-та Гц",
+    th_noise: "Шум СКО",
+    th_coh: "Когерент.",
+    th_r2: "R² модели",
+    dq_title: "Качество данных",
+    dq_rate: "Частота дискр.",
+    dq_nyquist: "Найквист",
+    dq_jitter: "Джиттер",
+    dq_drops: "Потери",
+    dq_confidence: "Уверенность",
+    dq_spectral: "Спектр. анализ",
+    dq_ok: "OK",
+    dq_limited: "ограничен (мало данных)",
+    dq_topic: "Топик",
+    dq_msgs: "Сообщений",
+    dq_achieved: "Частота (Гц)",
+    dq_nyq_col: "f_nyq (Гц)",
+    dq_jitter_col: "Джиттер (мс)",
+    dq_drop_col: "Потери %",
+    dir_increase: "увеличить",
+    dir_decrease: "уменьшить",
+    dir_info: "инфо",
+    conf_high: "высокая",
+    conf_medium: "средняя",
+    conf_low: "низкая",
+    analysis_disclaimer: "⚠ Только эвристические оценки. Меняйте по одному параметру. Проверяйте в SITL (Gazebo) перед реальным полётом.\nРекомендации НЕ учитывают динамику конкретного аппарата. Используйте на свой риск.",
+    run_history: "История запусков",
+    no_runs: "Нет записанных запусков.",
+    th_run: "Запуск",
+    th_timestamp: "Время",
+    th_frames: "Кадров",
+    th_recs: "Рек.",
+    compare_title: "Сравнение двух запусков",
+    compare_run_a: "Запуск A",
+    compare_run_b: "Запуск B",
+    compare_signal: "Сигнал",
+    compare_btn: "Сравнить",
+    select_runs: "Выберите запуски и нажмите Сравнить",
+    select_diff_runs: "⚠ Выберите два разных запуска.",
+    compare_loading: "Загрузка…",
+    sig_roll_rate: "Скорость крена (изм.)",
+    sig_roll_rate_sp: "Скорость крена SP",
+    sig_pitch_rate: "Скорость тангажа (изм.)",
+    sig_pitch_rate_sp: "Скорость тангажа SP",
+    sig_yaw_rate: "Скорость рыскания (изм.)",
+    sig_roll: "Угол крена (изм.)",
+    sig_pitch: "Угол тангажа (изм.)",
+    sig_torque_roll: "Момент крена",
+    sig_torque_pitch: "Момент тангажа",
+    sig_m0: "Мотор 0",
+    cmp_samples: "Показано {0} + {1} выборок",
+    cmp_error: "Ошибка: {0}",
+    cmp_title: "Сигнал: {0}  (t=0 выровнены)",
+    uploaded: "✓ Загружено {0} PID параметров",
+    uploaded_from_drone: "✓ Загружено {0} PID параметров с дрона",
+    upload_fail: "✗ {0}",
+    network_error: "✗ Ошибка сети: {0}",
+    fetching_text: "Загрузка… (~15 с)",
+    connecting_text: "Подключение к fmu_control…",
+    overshoot_fmt: "Перерегулирование {0}% | Нарастание {1}с | Установление {2}с | Частота {3}Гц",
+    loop_label_rate: "Контур скорости",
+    loop_label_attitude: "Контур углов",
+    rate_loop_of: "Контур скорости — {0}",
+    attitude_loop_of: "Контур углов — {0}",
+    roll: "Крен",
+    pitch: "Тангаж",
+    yaw: "Рыскание",
+    source_label: "Источник",
+    source_dds: "DDS (live)",
+    source_ulog: "ULog (файл)",
+    ulog_upload: "⬆ Загрузить и анализировать",
+    ulog_uploading: "Парсинг…",
+    ulog_ok: "✓ {0} кадров, {1} с, {2} рек.",
+    ulog_fail: "✗ {0}",
+    caps_title: "Активные алгоритмы",
+    cap_frf: "ЧХ (FRF)",
+    frf_unbiased: "по референсу (несмещённая)",
+    frf_biased: "по сетпоинту (смещённая, замкнутый контур)",
+    cap_margins: "Запасы уст.",
+    cap_vibe: "Вибрации",
+    cap_delay: "Задержка",
+    cap_plant: "ID объекта",
+    cap_arx: "ARX",
+    cap_filter: "Фильтр",
+    cap_off: "откл.",
+    excitation_label: "Возбуждение",
+    bode_title: "Bode — контур скорости",
+    bode_mag: "АЧХ (дБ)",
+    bode_phase: "Фаза (°)",
+    bode_coherence: "Когерентность",
+    margins_gm: "ЗУ",
+    margins_pm: "ЗФ",
+    margins_gc: "Частота среза",
+    margins_conf: "Уверен.",
+    margins_note: "заметка",
+    vibe_title: "Спектр вибраций (гироскоп Z)",
+    vibe_peak_hz: "Частота Гц",
+    vibe_amp: "Ампл. дБ",
+    vibe_harmonic: "Гармоника мотора",
+    vibe_filter: "Рекомендация по фильтру",
+    sim_title: "Предсказанный отклик (До / После)",
+    sim_before: "До (текущие гейны)",
+    sim_after: "После (предложенные)",
+    sim_overshoot: "Перерегул.",
+    sim_rise: "Нарастание",
+    sim_settle: "Установление",
+    synth_gains_label: "Предложенные гейны",
+    delay_title: "Задержка контура",
+    delay_axis: "Ось",
+    delay_ms: "Задержка (мс)",
+    delay_method: "Метод",
+    delay_conf: "Уверен.",
+    autotune_title: "Автотюн (метод PX4)",
+    autotune_note: "Офлайн-воспроизведение бортового автотюна PX4 (идентификация ARX(2,2,1) + синтез GMVC). Только чтение — применяйте предложенные гейны вручную или через QGC.",
+    autotune_param: "Параметр",
+    autotune_current: "Текущее",
+    autotune_suggested: "Предложено",
+    autotune_gate_ok: "гейт пройден",
+    autotune_rejected: "отклонено",
+    vio_title: "VIO / EV — Фьюз внешней одометрии",
+    vio_source_note: "Источник-агностично: анализирует всё, что EKF2 фьюзит как EV (ArUco/VPE, 3D-лидарная одометрия, 2D scan-match, камерный VIO, mocap).",
+    vio_tr_title: "Test-ratio инноваций (по осям)",
+    vio_bias_title: "Смещение инноваций и EKF-оценка смещения EV-позиции",
+    vio_dropout_title: "Дропауты фьюза EV / коастинг",
+    vio_delay_title: "Оценка EKF2_EV_DELAY",
+    vio_recs_title: "Рекомендации EKF2_EV_*",
+    vio_tr_axis: "Ось",
+    vio_tr_mean: "Среднее",
+    vio_tr_p95: "p95",
+    vio_tr_over1: "% > 1 (отвергнуто)",
+    vio_tr_n: "N",
+    vio_bias_axis: "Ось",
+    vio_bias_mean: "Ср. инновация (м)",
+    vio_bias_corr: "Корр. со скоростью",
+    vio_bias_class: "Вероятная причина",
+    vio_class_delay: "задержка",
+    vio_class_extrinsic: "экстринсик",
+    vio_class_none: "нет",
+    vio_drop_n: "Интервалов дропаута",
+    vio_drop_total: "Суммарно",
+    vio_drop_max: "Макс. интервал",
+    vio_drop_coast: "Коастинг/const-pos",
+    vio_delay_est: "Оценка задержки",
+    vio_delay_r2: "Корреляция R²",
+    vio_delay_dyn: "Динамика",
+    vio_delay_not_estimable: "Не оценивается — нет высокочастотного EV-источника. Добавьте estimator_aid_src_ev_* / vehicle_visual_odometry через logger_topics.txt.",
+    vio_rate: "Частота EV",
+    vio_latency: "Латентность (медиана/p95)",
+    vio_no_aidsrc: "Нет estimator_aid_src_ev_* в логе — добавьте logger_topics.txt для полного анализа и оценки EV_DELAY.",
+    vio_rec_param: "Параметр",
+    vio_rec_current: "Текущее",
+    vio_rec_suggested: "Предлагается",
+    vio_topics_found: "Найдено топиков",
+    vio_live_title: "Живой монитор VIO / EV (DDS)",
+    vio_live_banner: "Live по DDS показывает флаги фьюза + частоту/латентность EV. Численная консистентность инноваций и оценка EKF2_EV_DELAY — только по ULog (см. офлайн-вкладку VIO/EV).",
+    vio_live_source_note: "Источник-агностичный монитор EV (ArUco/VPE, 3D-лидарная одометрия, 2D scan-match, камерный VIO, mocap).",
+    vio_live_dr_alarm: "⚠ КОАСТИНГ — инерциальный dead reckoning (нет абсолютной привязки EV)",
+    vio_live_verdict_ok: "OK",
+    vio_live_verdict_warn: "ВНИМАНИЕ",
+    vio_live_verdict_crit: "КРИТ",
+    vio_live_verdict_unavailable: "Н/Д",
+    vio_live_flag_pos: "EV поз",
+    vio_live_flag_yaw: "EV курс",
+    vio_live_flag_hgt: "EV высота",
+    vio_live_flag_vel: "EV скор",
+    vio_live_source: "Источник",
+    vio_live_rate: "Частота EV",
+    vio_live_latency: "Латентность",
+    vio_live_quality: "Качество",
+    vio_live_reset: "Счётчик сбросов",
+    vio_live_age: "Возраст входа",
+    vio_live_divergence: "Расхождение EV↔EKF",
+    vio_live_rejects: "Отказы (hpos/vpos/yaw)",
+    vio_live_expected: "ожид.",
+    vio_live_reason_coasting: "Фильтр коастит (инерциальный dead reckoning)",
+    vio_live_reason_ev_input_silent: "Вход EV замолчал (нет сообщений в пределах таймаута)",
+    vio_live_reason_ev_pos_not_fused_airborne: "EV-позиция не фьюзится при арме",
+    vio_live_reason_ev_pos_not_fused: "EV-позиция не фьюзится (на земле)",
+    vio_live_reason_ev_yaw_not_fused: "EV-курс не фьюзится при арме",
+    vio_live_reason_low_rate: "Частота EV ниже 0.5× ожидаемой",
+    vio_live_reason_high_rate: "Частота EV выше 1.5× ожидаемой",
+    vio_live_reason_high_latency: "Латентность EV выше 100 мс",
+    vio_live_reason_reject_active: "Активен отказ по инновации",
+    vio_live_reason_no_vio_topics: "Нет доступных топиков VIO/EV",
+    // ── Вкладка EKF2 aid sources (промпт 62) ──────────────────────────
+    tab_aid: "Источники EKF2",
+    aid_unavailable: "Загрузите .ulg с estimator-топиками, чтобы увидеть диагностику источников EKF2.",
+    aid_title: "Источники коррекции EKF2",
+    aid_intro: "Одна метрик-машина по всем aid-источникам EKF2. Внешнее зрение — один из источников наряду с optical flow, дальномером-высотой, GPS, баро и магнитометром.",
+    aid_logger_hint: "Для delay/NEES по источнику включите estimator_aid_src_<src> в logger_topics.txt — в дефолтном логе aid_src-топиков нет.",
+    aid_active: "активен",
+    aid_inactive: "неактивен",
+    aid_present_label: "Найденные топики",
+    aid_coasting_msg: "ВСЯ одометрия потеряна — fake_position / инерциальный dead-reckoning {0}% лога. EKF коастит только на инерции.",
+    aid_tr_title: "Test-Ratio инноваций (по осям)",
+    aid_bias_title: "Смещение инноваций (задержка vs экстринсик)",
+    aid_drop_title: "Дропауты фьюза / отказы",
+    aid_delay_title: "Задержка / консистентность / частота",
+    aid_recs_title: "Рекомендации",
+    aid_axis: "Ось", aid_mean: "Среднее", aid_p95: "p95",
+    aid_over1: "% > 1 (отвергнуто)", aid_n: "N",
+    aid_bias_mean: "Ср. инновация (м)", aid_bias_corr: "Корр. со скоростью", aid_bias_class: "Вероятная причина",
+    aid_class_delay: "задержка", aid_class_extrinsic: "экстринсик", aid_class_none: "нет",
+    aid_drop_n: "Интервалов", aid_drop_total: "Суммарно", aid_drop_max: "Макс",
+    aid_delay_est: "Оценка задержки", aid_delay_r2: "R²", aid_delay_not: "Задержка не оценивается (нужен aid_src-топик).",
+    aid_nees_label: "NEES", aid_nees_none: "Нет NEES (нужен aid_src-топик в логе).",
+    aid_rate_label: "частота aid_src",
+    aid_rec_param: "Параметр", aid_rec_current: "Текущее", aid_rec_suggested: "Рекоменд.",
+    aid_no_recs: "Рекомендаций нет.",
+    aid_inactive_banner: "Источник неактивен — {0}. Рекомендаций нет.",
+    aid_ctrl_label: "CTRL",
+  }
+};
+
+let lang = localStorage.getItem('pid_tuning_lang') || 'en';
+
+function t(key, ...args) {
+  let s = (TR[lang] && TR[lang][key]) || (TR.en && TR.en[key]) || key;
+  if (args.length) s = s.replace(/\{(\d+)\}/g, (_, i) => args[+i] ?? '');
+  return s;
+}
+
+// ── XSS-safe HTML escaping ─────────────────────────────────────────────────────
+// Every value that originates from the server (run names, reason strings,
+// warnings, filter suggestions, notes …) must pass through esc() before it is
+// interpolated into an innerHTML template. Encodes the five HTML metacharacters
+// incl. both quote styles so it is safe inside attributes too.
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ── API token (optional bearer auth) ───────────────────────────────────────────
+function getToken() { return (localStorage.getItem('pid_assist_token') || '').trim(); }
+function setToken(v) { localStorage.setItem('pid_assist_token', (v || '').trim()); }
+
+// Drop-in fetch replacement that attaches the bearer token when one is set.
+function api(url, opts) {
+  opts = opts || {};
+  const tok = getToken();
+  if (tok) {
+    opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + tok });
+  }
+  return fetch(url, opts);
+}
+
+// Append ?token= for URLs the browser can't add a header to (WS, downloads).
+function withToken(url) {
+  const tok = getToken();
+  if (!tok) return url;
+  return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(tok);
+}
+
+function onTokenInput(v) {
+  setToken(v);
+  // Reconnect the live stream so the new token takes effect immediately.
+  try { if (ws) ws.close(); } catch (e) {}
+}
+
+function switchLang() {
+  lang = lang === 'en' ? 'ru' : 'en';
+  localStorage.setItem('pid_tuning_lang', lang);
+  applyLang();
+}
+
+async function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.getAttribute('data-i18n'));
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+  });
+  document.getElementById('plot-title').textContent = loopTitleStr();
+  document.title = t('title');
+  const tabActive = document.querySelector('.tab-content.active');
+  if (tabActive) {
+    const tabId = tabActive.id;
+    if (tabId === 'tab-analysis') {
+      const ar = await api(`/api/analysis?lang=${lang}`);
+      if (ar.ok) {
+        analysisData = await ar.json();
+        renderAnalysis(analysisData);
+      }
+      // Re-fetch VIO so server-translated EKF2_EV_* reasons follow the language.
+      if (vioData) {
+        const vr = await api(`/api/vio?lang=${lang}`);
+        if (vr.ok) { vioData = await vr.json(); renderVio(vioData); }
+      }
+    }
+    if (tabId === 'tab-aid' && aidData) {
+      const r = await api(`/api/aid_sources?lang=${lang}`);
+      if (r.ok) { aidData = await r.json(); renderAidSources(aidData); }
+    }
+    if (tabId === 'tab-history') refreshHistory();
+  }
+  cleanGraphs();
+}
+
+function loopTitleStr() {
+  const axisName = t(axis);
+  return loopType === 'rate' ? t('rate_loop_of', axisName) : t('attitude_loop_of', axisName);
+}
+
+function axisName(a) { return t(a); }
+
+// ── state ────────────────────────────────────────────────────────────────────
+const MAX_PTS = 600;
+let axis = 'roll', loopType = 'rate';
+let ts = [], sp_data = [], meas_data = [], ctrl_data = [];
+let m0=[], m1=[], m2=[], m3=[];
+let ws, analysisData = null;
+
+// ── Plotly layout helpers ─────────────────────────────────────────────────────
+const DARK = {
+  paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+  font: { color: '#e2e8f0', size: 11 },
+  xaxis: { gridcolor: '#2d3142', zerolinecolor: '#2d3142' },
+  yaxis: { gridcolor: '#2d3142', zerolinecolor: '#2d3142' },
+  margin: { t: 10, b: 40, l: 50, r: 10 },
+  legend: { bgcolor: 'transparent', orientation: 'h', x: 0, y: 1.1 },
+};
+
+function mkLayout(ytitle) {
+  return { ...DARK, yaxis: { ...DARK.yaxis, title: ytitle } };
+}
+
+// ── chart init ────────────────────────────────────────────────────────────────
+function initCharts() {
+  Plotly.newPlot('plot-rate', [
+    { name: t('trace_setpoint'), x: [], y: [], mode: 'lines', line: { color: '#4c9be8', width: 1.5 } },
+    { name: t('trace_measured'),  x: [], y: [], mode: 'lines', line: { color: '#22c55e', width: 1.5 } },
+  ], mkLayout('rad/s'), { responsive: true });
+
+  Plotly.newPlot('plot-ctrl', [
+    { name: t('trace_torque'), x: [], y: [], mode: 'lines', line: { color: '#a78bfa', width: 1.5 } },
+  ], mkLayout('norm'), { responsive: true });
+
+  Plotly.newPlot('plot-motors', [
+    { name: 'M0', x:[], y:[], mode:'lines', line:{color:'#f97316',width:1} },
+    { name: 'M1', x:[], y:[], mode:'lines', line:{color:'#06b6d4',width:1} },
+    { name: 'M2', x:[], y:[], mode:'lines', line:{color:'#a78bfa',width:1} },
+    { name: 'M3', x:[], y:[], mode:'lines', line:{color:'#f43f5e',width:1} },
+  ], { ...mkLayout('[0-1]'), showlegend: true }, { responsive: true });
+
+  Plotly.newPlot('plot-step', [], { ...mkLayout('rad/s'), title: t('no_step_data') }, { responsive: true });
+  Plotly.newPlot('plot-compare', [], { ...mkLayout('value'), paper_bgcolor:'transparent', plot_bgcolor:'transparent' }, { responsive: true });
+}
+initCharts();
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(withToken(`${proto}://${location.host}/ws/stream`));
+  ws.onmessage = e => onFrame(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(connectWS, 2000);
+}
+connectWS();
+
+function onFrame(d) {
+  // VIO/EV live watchdog arrives on its own cadence and may be the only field
+  // in a message (rate loop can be idle while EV keeps publishing).
+  if (d.vio !== undefined) renderVioLive(d.vio);
+
+  // Rate-loop plotting only when a telemetry frame is present.
+  if (d.t !== undefined) {
+    const now = d.t;
+    const sp   = loopType === 'rate' ? d[`${axis}_rate_sp`] : d[`${axis}_sp`];
+    const meas = loopType === 'rate' ? d[`${axis}_rate`]    : d[axis];
+    const ctrl = d[`torque_${axis}`];
+
+    push(ts, now); push(sp_data, sp); push(meas_data, meas); push(ctrl_data, ctrl);
+    push(m0, d.m0); push(m1, d.m1); push(m2, d.m2); push(m3, d.m3);
+
+    Plotly.extendTraces('plot-rate',  { x:[[now],[now]], y:[[sp],[meas]] }, [0,1], MAX_PTS);
+    Plotly.extendTraces('plot-ctrl',  { x:[[now]], y:[[ctrl ?? null]] }, [0], MAX_PTS);
+    Plotly.extendTraces('plot-motors',{ x:[[now],[now],[now],[now]], y:[[d.m0],[d.m1],[d.m2],[d.m3]] }, [0,1,2,3], MAX_PTS);
+
+    document.getElementById('mode-indicator').textContent = d.nav_state_name || '—';
+  }
+
+  const recBadge = document.getElementById('rec-badge');
+  if (d.recording) { recBadge.className='badge rec'; recBadge.textContent=t('rec'); }
+  else             { recBadge.className='badge idle'; recBadge.textContent=t('idle'); }
+
+  document.getElementById('frame-count').textContent = d.frame_count ?? 0;
+
+  if (d.bat_remaining != null) {
+    const pct = Math.round(d.bat_remaining * 100);
+    document.getElementById('bat-pct').textContent = pct + '%';
+    const bar = document.getElementById('bat-bar');
+    bar.style.width = pct + '%';
+    bar.style.background = pct > 50 ? '#22c55e' : pct > 20 ? '#eab308' : '#ef4444';
+  }
+}
+
+function push(arr, v) {
+  arr.push(v ?? null);
+  if (arr.length > MAX_PTS) arr.shift();
+}
+
+// ── VIO / EV live monitor (DDS watchdog) ────────────────────────────
+// Built entirely with textContent / DOM nodes (no innerHTML interpolation) so
+// server-sourced values can never inject markup.
+function vioLampState(v) { return v === true ? 'on' : v === false ? 'off' : 'unknown'; }
+
+function vioLampItem(labelKey, v) {
+  const span = document.createElement('span');
+  span.className = 'lamp-item';
+  const dot = document.createElement('span');
+  dot.className = 'lamp ' + vioLampState(v);
+  span.appendChild(dot);
+  span.appendChild(document.createTextNode(t(labelKey)));
+  return span;
+}
+
+function vioMetric(labelKey, value) {
+  const wrap = document.createElement('div');
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:10px;text-transform:uppercase;color:var(--muted)';
+  lbl.textContent = t(labelKey);
+  const val = document.createElement('div');
+  val.style.cssText = 'font-family:monospace;font-size:13px;color:var(--text)';
+  val.textContent = value;
+  wrap.appendChild(lbl); wrap.appendChild(val);
+  return wrap;
+}
+
+function fmtOrDash(v, digits, suffix) {
+  if (v === null || v === undefined) return '—';
+  const n = (typeof v === 'number') ? v.toFixed(digits) : String(v);
+  return suffix ? n + suffix : n;
+}
+
+function renderVioLive(v) {
+  const card = document.getElementById('vio-live-card');
+  if (!v || !v.available) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  // Summary traffic light
+  const badge = document.getElementById('vio-live-verdict');
+  const verdict = (v.verdict || 'UNAVAILABLE').toLowerCase();
+  badge.textContent = t('vio_live_verdict_' + verdict);
+  const cls = verdict === 'crit' ? 'stop' : verdict === 'warn' ? 'warn'
+            : verdict === 'ok' ? 'rec' : 'idle';
+  badge.className = 'badge ' + cls;
+
+  // Coasting alarm (big)
+  document.getElementById('vio-live-dr').style.display =
+      v.cs_inertial_dead_reckoning === true ? '' : 'none';
+
+  // Fusion lamps
+  const lamps = document.getElementById('vio-live-lamps');
+  lamps.textContent = '';
+  lamps.appendChild(vioLampItem('vio_live_flag_pos', v.cs_ev_pos));
+  lamps.appendChild(vioLampItem('vio_live_flag_yaw', v.cs_ev_yaw));
+  lamps.appendChild(vioLampItem('vio_live_flag_hgt', v.cs_ev_hgt));
+  lamps.appendChild(vioLampItem('vio_live_flag_vel', v.cs_ev_vel));
+
+  // Metrics
+  const m = document.getElementById('vio-live-metrics');
+  m.textContent = '';
+  const rateStr = fmtOrDash(v.ev_rate_hz, 1, ' Hz') +
+      ' (' + t('vio_live_expected') + ' ' + fmtOrDash(v.expected_rate_hz, 0, '') + ')';
+  m.appendChild(vioMetric('vio_live_source', v.source || '—'));
+  m.appendChild(vioMetric('vio_live_rate', rateStr));
+  m.appendChild(vioMetric('vio_live_latency', fmtOrDash(v.ev_latency_ms, 1, ' ms')));
+  m.appendChild(vioMetric('vio_live_age', fmtOrDash(v.ev_input_age_s, 3, ' s')));
+  m.appendChild(vioMetric('vio_live_quality', fmtOrDash(v.ev_quality, 0, '')));
+  m.appendChild(vioMetric('vio_live_reset', fmtOrDash(v.ev_reset_counter, 0, '')));
+  m.appendChild(vioMetric('vio_live_divergence', fmtOrDash(v.ev_ekf_divergence_m, 3, ' m')));
+  m.appendChild(vioMetric('vio_live_rejects',
+      `${v.reject_hor_pos_count|0} / ${v.reject_ver_pos_count|0} / ${v.reject_yaw_count|0}`));
+
+  // Reason list
+  const reasons = document.getElementById('vio-live-reasons');
+  reasons.textContent = (v.verdict_reasons || [])
+      .map(k => t('vio_live_reason_' + k))
+      .join(' · ');
+}
+
+// ── controls ──────────────────────────────────────────────────────────────────
+function switchAxis(a) { axis = a; document.getElementById('plot-title').textContent = loopTitleStr(); }
+function switchLoop(l) { loopType = l; document.getElementById('plot-title').textContent = loopTitleStr(); }
+
+function cleanGraphs() {
+  ts.length = 0; sp_data.length = 0; meas_data.length = 0; ctrl_data.length = 0;
+  m0.length = 0; m1.length = 0; m2.length = 0; m3.length = 0;
+  Plotly.purge('plot-rate');
+  Plotly.newPlot('plot-rate', [
+    { name: t('trace_setpoint'), x: [], y: [], mode: 'lines', line: { color: '#4c9be8', width: 1.5 } },
+    { name: t('trace_measured'),  x: [], y: [], mode: 'lines', line: { color: '#22c55e', width: 1.5 } },
+  ], mkLayout('rad/s'), { responsive: true });
+  Plotly.purge('plot-ctrl');
+  Plotly.newPlot('plot-ctrl', [
+    { name: t('trace_torque'), x: [], y: [], mode: 'lines', line: { color: '#a78bfa', width: 1.5 } },
+  ], mkLayout('norm'), { responsive: true });
+  Plotly.purge('plot-motors');
+  Plotly.newPlot('plot-motors', [
+    { name: 'M0', x:[], y:[], mode:'lines', line:{color:'#f97316',width:1} },
+    { name: 'M1', x:[], y:[], mode:'lines', line:{color:'#06b6d4',width:1} },
+    { name: 'M2', x:[], y:[], mode:'lines', line:{color:'#a78bfa',width:1} },
+    { name: 'M3', x:[], y:[], mode:'lines', line:{color:'#f43f5e',width:1} },
+  ], { ...mkLayout('[0-1]'), showlegend: true }, { responsive: true });
+}
+
+async function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['live','analysis','aid','history'][i]===id));
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById(`tab-${id}`).classList.add('active');
+  if (id === 'analysis') {
+    const ar = await api(`/api/analysis?lang=${lang}`);
+    if (ar.ok) {
+      analysisData = await ar.json();
+      renderAnalysis(analysisData);
+    }
+  }
+  if (id === 'aid') {
+    const r = await api(`/api/aid_sources?lang=${lang}`);
+    if (r.ok) { aidData = await r.json(); renderAidSources(aidData); }
+    else { renderAidSources(null); }
+  }
+  if (id === 'history') refreshHistory();
+}
+
+// ── recording ─────────────────────────────────────────────────────────────────
+let elapsedTimer = null;
+let elapsedSec = 0;
+
+async function startRec() {
+  const name = document.getElementById('run-name').value.trim();
+  const r = await api('/api/start', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ run_name: name })
+  });
+  if (!r.ok) { alert(await r.text()); return; }
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-stop').disabled  = false;
+  elapsedSec = 0;
+  elapsedTimer = setInterval(() => {
+    elapsedSec++;
+    document.getElementById('elapsed').textContent = elapsedSec + 's';
+  }, 1000);
+}
+
+async function stopRec() {
+  clearInterval(elapsedTimer);
+  const r = await api('/api/stop', { method:'POST' });
+  if (!r.ok) { alert(await r.text()); return; }
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-stop').disabled  = true;
+  await r.json();
+  const ar = await api(`/api/analysis?lang=${lang}`);
+  if (ar.ok) {
+    analysisData = await ar.json();
+    renderAnalysis(analysisData);
+  }
+  switchTab('analysis');
+}
+
+// ── params upload ─────────────────────────────────────────────────────────────
+async function uploadParams() {
+  const file = document.getElementById('params-file').files[0];
+  if (!file) return;
+  const form = new FormData();
+  form.append('file', file);
+  const r = await api('/api/params', { method:'POST', body: form });
+  const d = await r.json();
+  document.getElementById('params-status').textContent =
+    r.ok ? t('uploaded', d.loaded) : t('upload_fail', d.detail);
+}
+
+async function fetchParamsLive() {
+  const btn = document.getElementById('btn-fetch-live');
+  const status = document.getElementById('params-status');
+  btn.disabled = true;
+  btn.textContent = t('fetching_text');
+  status.textContent = t('connecting_text');
+  try {
+    const r = await api('/api/params/live', { method: 'POST' });
+    const d = await r.json();
+    if (r.ok) {
+      status.textContent = t('uploaded_from_drone', d.loaded);
+      status.style.color = 'var(--ok)';
+    } else {
+      status.textContent = t('upload_fail', d.detail || 'Error ' + r.status);
+      status.style.color = 'var(--warn)';
+    }
+  } catch (e) {
+    status.textContent = t('network_error', e.message);
+    status.style.color = 'var(--warn)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t('fetch_drone');
+  }
+}
+
+// ── data quality panel ────────────────────────────────────────────────────────
+function renderDataQuality(dq) {
+  if (!dq) return;
+  const card = document.getElementById('dq-card');
+  card.style.display = '';
+
+  const confColor = dq.overall_confidence === 'high' ? 'green'
+                  : dq.overall_confidence === 'medium' ? 'yellow' : 'red';
+  document.getElementById('dq-overview').innerHTML = `
+    <div><span style="color:var(--muted);font-size:11px">${t('dq_rate')}</span><br>
+      <b class="stat-val">${dq.achieved_rate_hz.toFixed(1)} Hz</b></div>
+    <div><span style="color:var(--muted);font-size:11px">${t('dq_nyquist')}</span><br>
+      <b class="stat-val">${dq.f_nyquist_hz.toFixed(1)} Hz</b></div>
+    <div><span style="color:var(--muted);font-size:11px">${t('dq_jitter')}</span><br>
+      <b class="stat-val">${dq.jitter_ms.toFixed(1)} ms</b></div>
+    <div><span style="color:var(--muted);font-size:11px">${t('dq_drops')}</span><br>
+      <b class="stat-val">${dq.drop_pct.toFixed(1)}%</b></div>
+    <div><span style="color:var(--muted);font-size:11px">${t('dq_confidence')}</span><br>
+      <b class="stat-val ${confColor}">${dq.overall_confidence}</b></div>
+    <div><span style="color:var(--muted);font-size:11px">${t('dq_spectral')}</span><br>
+      <b class="stat-val ${dq.spectral_ok ? 'green' : 'yellow'}">${dq.spectral_ok ? t('dq_ok') : t('dq_limited')}</b></div>
+  `;
+
+  const topics = dq.topic_stats || {};
+  const rows = Object.entries(topics).filter(([, v]) => v.msg_count > 0);
+  if (rows.length) {
+    document.getElementById('dq-table-wrap').innerHTML =
+      `<div style="overflow-x:auto"><table>
+        <thead><tr>
+          <th>${t('dq_topic')}</th><th>${t('dq_msgs')}</th>
+          <th>${t('dq_achieved')}</th><th>${t('dq_nyq_col')}</th>
+          <th>${t('dq_jitter_col')}</th><th>${t('dq_drop_col')}</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(([k, v]) => `<tr>
+            <td style="font-family:monospace;font-size:11px">${esc(k)}</td>
+            <td>${v.msg_count}</td>
+            <td>${v.achieved_rate_hz.toFixed(1)}</td>
+            <td>${v.f_nyquist_hz.toFixed(1)}</td>
+            <td style="color:${v.jitter_ms>5?'#eab308':'inherit'}">${v.jitter_ms.toFixed(1)}</td>
+            <td style="color:${v.drop_pct>5?'#ef4444':'inherit'}">${v.drop_pct.toFixed(1)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+  }
+
+  const notes = dq.notes || [];
+  document.getElementById('dq-notes').textContent = notes.join('  ·  ');
+}
+
+// ── analysis render ───────────────────────────────────────────────────────────
+function renderAnalysis(data) {
+  const wc = document.getElementById('warn-container');
+  wc.innerHTML = '';
+  if (data.warnings && data.warnings.length) {
+    const box = document.createElement('div');
+    box.className = 'warn-box';
+    box.innerHTML = '<b>' + t('warnings_header') + '</b><ul style="margin-top:6px;padding-left:16px">'
+      + data.warnings.map(w => `<li>${esc(w)}</li>`).join('') + '</ul>';
+    wc.appendChild(box);
+  }
+
+  renderDataQuality(data.data_quality);
+
+  const recs = data.recommendations || [];
+  const rw = document.getElementById('rec-table-wrap');
+  if (!recs.length) {
+    rw.innerHTML = '<div class="info-box">' + t('no_recs') + '</div>';
+  } else {
+    rw.innerHTML = `<table>
+      <thead><tr>
+        <th>${t('th_axis')}</th><th>${t('th_param')}</th><th>${t('th_current')}</th><th>${t('th_suggested')}</th>
+        <th>${t('th_delta')}</th><th>${t('th_direction')}</th><th>${t('th_confidence')}</th><th>${t('th_reason')}</th>
+      </tr></thead>
+      <tbody>
+        ${recs.map(r => `
+          <tr>
+            <td>${t(r.axis)}</td>
+            <td class="rec-param">${esc(r.param)}</td>
+            <td>${r.current != null ? r.current : '—'}</td>
+            <td>${r.suggested != null ? r.suggested : '—'}</td>
+            <td style="color:${r.delta_pct>0?'#22c55e':'#ef4444'}">${r.delta_pct>0?'+':''}${r.delta_pct}%</td>
+            <td>${r.direction === 'increase' ? t('dir_increase') : r.direction === 'decrease' ? t('dir_decrease') : t('dir_' + r.direction)}</td>
+            <td class="conf-${r.confidence}">${t('conf_' + r.confidence)}</td>
+            <td style="max-width:300px;white-space:normal;font-size:11px">${esc(r.reason)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    <p class="disclaimer" style="margin-top:8px">${t('analysis_disclaimer')}</p>`;
+  }
+
+  const segs = data.segments || [];
+  const mw = document.getElementById('metrics-table-wrap');
+  if (!segs.length) {
+    mw.innerHTML = '<div class="info-box">' + t('no_segments') + '</div>';
+  } else {
+    mw.innerHTML = `<div style="overflow-x:auto"><table>
+      <thead><tr>
+        <th>${t('th_mode')}</th><th>${t('th_loop')}</th><th>${t('th_axis')}</th><th>${t('th_events')}</th>
+        <th>${t('th_overshoot')}</th><th>${t('th_rise')}</th><th>${t('th_settle')}</th>
+        <th>${t('th_rms')}</th><th>${t('th_dom_freq')}</th><th>${t('th_noise')}</th>
+        <th>${t('th_coh')}</th><th>${t('th_r2')}</th>
+      </tr></thead>
+      <tbody>
+        ${segs.map(s => {
+          const m = s.metrics || s;
+          const ovs = (m.overshoot_pct_mean ?? s.overshoot_pct_mean ?? 0).toFixed(1);
+          const rt  = (m.rise_time_mean_s ?? s.rise_time_mean_s ?? 0).toFixed(3);
+          const st  = (m.settling_time_mean_s ?? s.settling_time_mean_s ?? 0).toFixed(3);
+          const rms = (m.rms_error_mean ?? s.rms_error_mean ?? 0).toFixed(4);
+          const df  = (m.dominant_freq_hz ?? s.dominant_freq_hz ?? 0).toFixed(2);
+          const nr  = (m.noise_rms ?? s.noise_rms ?? 0).toFixed(5);
+          const coh = s.coherence_verdict || '—';
+          const r2  = (s.model_r2_mean ?? 0).toFixed(2);
+          return `<tr>
+            <td>${esc(s.mode)}</td>
+            <td style="color:${s.loop==='rate'?'#4c9be8':'#a78bfa'}">${s.loop === 'attitude' ? t('loop_attitude_short') : t('loop_rate_short')}</td>
+            <td>${t(s.axis)}</td><td>${s.n_events}</td>
+            <td style="color:${parseFloat(ovs)>20?'#ef4444':'#22c55e'}">${ovs}</td>
+            <td>${rt}</td><td>${st}</td><td>${rms}</td>
+            <td style="color:${parseFloat(df)>1?'#eab308':'inherit'}">${df}</td>
+            <td style="color:${parseFloat(nr)>0.08?'#ef4444':'inherit'}">${nr}</td>
+            <td style="font-size:11px;color:${coh==='high_coherence'?'#4c9be8':coh==='low_coherence'?'#eab308':'inherit'}">${esc(coh)}</td>
+            <td style="color:${parseFloat(r2)>0.7?'#22c55e':parseFloat(r2)>0.5?'#eab308':'#ef4444'}">${r2}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>`;
+  }
+
+  const seg = segs.find(s => s.n_events > 0 && s.axis === axis && s.loop === 'rate')
+           || segs.find(s => s.n_events > 0 && s.axis === axis)
+           || segs.find(s => s.n_events > 0)
+           || null;
+  if (seg && seg.events.length > 0) {
+    const ev = seg.events[0];
+    const loopLabel = seg.loop === 'attitude' ? t('loop_attitude_short') : t('loop_rate_short');
+    document.getElementById('step-axis-label').textContent =
+      `${t(seg.axis)} / ${loopLabel} — ${seg.mode}`;
+    Plotly.react('plot-step', [
+      {
+        x: [ev.t_start, ev.t_start + ev.rise_time_s, ev.t_end],
+        y: [ev.sp_before, ev.sp_after * (1 + ev.overshoot_pct/100), ev.sp_after],
+        mode: 'lines+markers', name: t('trace_response'),
+        line: { color: '#22c55e', width: 2 },
+        marker: { size: 6 }
+      },
+      {
+        x: [ev.t_start, ev.t_end],
+        y: [ev.sp_after, ev.sp_after],
+        mode: 'lines', name: t('trace_setpoint'),
+        line: { color: '#4c9be8', width: 1.5, dash: 'dash' }
+      }
+    ], {
+      ...mkLayout(seg.loop === 'attitude' ? 'rad' : 'rad/s'),
+      title: { text: t('overshoot_fmt',
+        ev.overshoot_pct.toFixed(1), ev.rise_time_s.toFixed(3),
+        ev.settling_time_s.toFixed(3), ev.dominant_freq_hz.toFixed(2)),
+        font:{size:11,color:'#94a3b8'} }
+    }, { responsive: true });
+  }
+
+  updateTopicList(data.topic_status || {});
+}
+
+// ── source switching ──────────────────────────────────────────────────────────
+function switchSource(src) {
+  document.getElementById('dds-panel').style.display  = src === 'dds'  ? '' : 'none';
+  document.getElementById('ulog-panel').style.display = src === 'ulog' ? '' : 'none';
+}
+
+// ── ULog upload ───────────────────────────────────────────────────────────────
+let hifiData = null, plantData = null, autotuneData = null, vioData = null, aidData = null;
+let aidSelected = null;
+
+async function uploadUlog() {
+  const fileInput = document.getElementById('ulog-file');
+  const statusEl  = document.getElementById('ulog-status');
+  if (!fileInput.files.length) return;
+
+  const btn = document.getElementById('btn-ulog-upload');
+  btn.disabled = true;
+  statusEl.textContent = t('ulog_uploading');
+
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  fd.append('lang', lang);
+
+  try {
+    const resp = await api('/api/ulog/upload?lang=' + lang, { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || resp.statusText);
+
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = t('ulog_ok', data.n_frames, data.duration_s?.toFixed(1) ?? '?', data.n_recommendations);
+
+    // Switch to Analysis tab
+    switchTab('analysis');
+
+    // Load and render analysis
+    const ar = await api('/api/analysis?lang=' + lang);
+    if (ar.ok) { analysisData = await ar.json(); renderAnalysis(analysisData); }
+
+    // Load and render HiFi if available
+    if (data.hifi_available) {
+      const hr = await api('/api/hifi');
+      if (hr.ok) { hifiData = await hr.json(); }
+    }
+    if (data.plant_available) {
+      const pr = await api('/api/plant');
+      if (pr.ok) { plantData = await pr.json(); }
+    }
+    if (data.autotune_available) {
+      const at = await api('/api/autotune');
+      if (at.ok) { autotuneData = await at.json(); }
+    }
+    if (data.vio_available) {
+      const vr = await api('/api/vio?lang=' + lang);
+      if (vr.ok) { vioData = await vr.json(); }
+    }
+    if (data.aid_sources_available) {
+      const r = await api('/api/aid_sources?lang=' + lang);
+      if (r.ok) { aidData = await r.json(); }
+    }
+    renderHiFi(hifiData, plantData, data.capabilities);
+    renderAutotune(autotuneData);
+    renderVio(vioData);
+    renderAidSources(aidData);
+
+  } catch (e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = t('ulog_fail', e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── HiFi rendering orchestrator ───────────────────────────────────────────────
+function renderHiFi(hifi, plant, caps) {
+  const section = document.getElementById('hifi-section');
+  if (!hifi && !plant) { section.style.display = 'none'; return; }
+  section.style.display = '';
+
+  if (caps) renderCapabilities(caps, hifi);
+  if (hifi?.frf?.length)      renderBode('roll');
+  if (hifi?.vibration)        renderVibration(hifi.vibration);
+  if (plant?.length)          renderSimulation(plant[0]);
+  if (hifi?.delays?.length)   renderDelays(hifi.delays);
+}
+
+// ── Capability badges ─────────────────────────────────────────────────────────
+function renderCapabilities(caps, hifi) {
+  const container = document.getElementById('caps-badges');
+  const exc       = document.getElementById('excitation-info');
+
+  const items = [
+    { key: 'cap_frf',    on: caps.freq_domain_available },
+    { key: 'cap_margins',on: caps.freq_domain_available && (hifi?.margins?.some(m => m.gain_margin_db != null)) },
+    { key: 'cap_vibe',   on: caps.vibration_available },
+    { key: 'cap_delay',  on: caps.freq_domain_available },
+    { key: 'cap_plant',  on: caps.sysid_hifi_available },
+    { key: 'cap_arx',    on: caps.sysid_hifi_available },
+    { key: 'cap_filter', on: caps.raw_sensor_available },
+  ];
+  container.innerHTML = items.map(item => {
+    const on = item.on;
+    const color = on ? 'var(--green)' : 'var(--muted)';
+    const label = t(item.key) + (on ? '' : ' (' + t('cap_off') + ')');
+    return `<span style="padding:3px 8px;border-radius:4px;border:1px solid ${color};color:${color}">${label}</span>`;
+  }).join('');
+
+  const excType = caps.excitation_type || 'unknown';
+  const excQ    = caps.excitation_quality || 'unknown';
+  const qColor  = excQ === 'good' ? 'var(--green)' : excQ === 'marginal' ? 'var(--yellow)' : 'var(--muted)';
+  exc.innerHTML = `<span style="color:var(--muted)">${t('excitation_label')}: </span>`
+    + `<b style="color:${qColor}">${esc(excType)} / ${esc(excQ)}</b>`;
+  if (hifi?.excitation?.note) {
+    exc.innerHTML += `<br><span style="font-size:11px;color:var(--muted)">${esc(hifi.excitation.note)}</span>`;
+  }
+}
+
+// ── Bode plots ────────────────────────────────────────────────────────────────
+function renderBode(axisName) {
+  if (!hifiData?.frf?.length) return;
+  const frf = hifiData.frf.find(f => f.axis === axisName && f.loop === 'rate')
+           || hifiData.frf.find(f => f.loop === 'rate');
+  if (!frf) return;
+
+  const validPts = frf.bode.filter(b => b.valid);
+  const allPts   = frf.bode;
+
+  const fAll = allPts.map(b => b.freq_hz);
+  const fVal = validPts.map(b => b.freq_hz);
+
+  // Method badge: reference-based (unbiased) vs setpoint-based (closed-loop biased).
+  const methodBadge = frf.method === 'reference_indirect' ? t('frf_unbiased') : t('frf_biased');
+
+  // Magnitude
+  Plotly.react('plot-bode-mag', [
+    { x: fAll, y: allPts.map(b => b.mag_db),
+      name: t('bode_mag'), mode: 'lines', line: { color: '#94a3b8', width: 1 } },
+    { x: fVal, y: validPts.map(b => b.mag_db),
+      name: t('bode_mag') + ' (coh≥0.6)', mode: 'lines', line: { color: '#4c9be8', width: 2 } },
+  ], { ...mkLayout(t('bode_mag') + ' — ' + methodBadge), xaxis: { ...DARK.xaxis, type: 'log', title: 'Hz' },
+       shapes: [{ type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0, y1: 0,
+                  line: { color: '#ef444466', dash: 'dot', width: 1 } }] },
+  { responsive: true });
+
+  // Phase
+  Plotly.react('plot-bode-phase', [
+    { x: fAll, y: allPts.map(b => b.phase_deg),
+      name: t('bode_phase'), mode: 'lines', line: { color: '#94a3b8', width: 1 } },
+    { x: fVal, y: validPts.map(b => b.phase_deg),
+      name: t('bode_phase') + ' (coh≥0.6)', mode: 'lines', line: { color: '#22c55e', width: 2 } },
+    { x: fAll, y: allPts.map(b => b.coherence * 180 - 180),
+      name: t('bode_coherence') + ' (scaled)', mode: 'lines',
+      line: { color: '#eab30866', width: 1, dash: 'dot' }, yaxis: 'y2' },
+  ], { ...mkLayout(t('bode_phase')),
+       xaxis: { ...DARK.xaxis, type: 'log', title: 'Hz' },
+       yaxis2: { overlaying: 'y', side: 'right', showgrid: false,
+                 range: [-180, 0], tickfont: { size: 9, color: '#eab308' } },
+       shapes: [{ type: 'line', x0: 0, x1: 1, xref: 'paper', y0: -180, y1: -180,
+                  line: { color: '#ef444466', dash: 'dot', width: 1 } }] },
+  { responsive: true });
+
+  // Margins row
+  const margins = hifiData.margins?.find(m => m.axis === axisName)
+               || hifiData.margins?.[0];
+  const mr = document.getElementById('margins-row');
+  if (margins) {
+    const confColor = margins.confidence === 'medium' ? 'var(--yellow)'
+                    : margins.confidence === 'high'   ? 'var(--green)' : 'var(--muted)';
+    mr.innerHTML = [
+      margins.gain_margin_db    != null ? `<div><span style="color:var(--muted)">${t('margins_gm')}: </span><b style="color:${margins.gain_margin_db>6?'var(--green)':'var(--red)'}">${margins.gain_margin_db.toFixed(1)} dB</b></div>` : '',
+      margins.phase_margin_deg  != null ? `<div><span style="color:var(--muted)">${t('margins_pm')}: </span><b style="color:${margins.phase_margin_deg>30?'var(--green)':'var(--red)'}">${margins.phase_margin_deg.toFixed(1)}°</b></div>` : '',
+      margins.gain_crossover_hz != null ? `<div><span style="color:var(--muted)">${t('margins_gc')}: </span><b>${margins.gain_crossover_hz.toFixed(2)} Hz</b></div>` : '',
+      `<div><span style="color:var(--muted)">${t('margins_conf')}: </span><b style="color:${confColor}">${margins.confidence}</b></div>`,
+      margins.note ? `<div style="font-size:10px;color:var(--muted);flex:1 0 100%">${esc(margins.note)}</div>` : '',
+    ].join('');
+  } else {
+    mr.innerHTML = `<span style="color:var(--muted);font-size:11px">${t('no_data')}</span>`;
+  }
+}
+
+// ── Vibration spectrum ────────────────────────────────────────────────────────
+function renderVibration(vibe) {
+  if (!vibe?.fft_f?.length) { document.getElementById('vibe-card').style.display = 'none'; return; }
+  document.getElementById('vibe-card').style.display = '';
+
+  Plotly.react('plot-vibe', [
+    { x: vibe.fft_f, y: vibe.fft_mag_db, mode: 'lines',
+      line: { color: '#a78bfa', width: 1.5 }, name: 'gyro Z PSD (dB)' },
+    ...(vibe.peaks?.map(p => ({
+      x: [p.freq_hz], y: [p.amplitude_db],
+      mode: 'markers', marker: { color: '#ef4444', size: 8, symbol: 'triangle-up' },
+      name: `${p.freq_hz} Hz`, text: [p.filter_suggestion],
+      hovertemplate: '%{x} Hz<br>%{text}<extra></extra>',
+    })) || []),
+  ], { ...mkLayout('dB'), xaxis: { ...DARK.xaxis, title: 'Hz' } }, { responsive: true });
+
+  const peaksEl = document.getElementById('vibe-peaks');
+  if (vibe.peaks?.length) {
+    peaksEl.innerHTML = `<table><thead><tr>
+      <th>${t('vibe_peak_hz')}</th><th>${t('vibe_amp')}</th>
+      <th>${t('vibe_harmonic')}</th><th>${t('vibe_filter')}</th>
+      </tr></thead><tbody>
+      ${vibe.peaks.map(p => `<tr>
+        <td>${p.freq_hz}</td><td>${p.amplitude_db}</td>
+        <td style="color:var(--yellow)">${esc(p.motor_harmonic || '—')}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--accent)">${esc(p.filter_suggestion)}</td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  } else {
+    peaksEl.innerHTML = `<span style="color:var(--muted);font-size:11px">${t('no_data')}</span>`;
+  }
+}
+
+// ── Before / After simulation ─────────────────────────────────────────────────
+function renderSimulation(plantEst) {
+  if (!plantEst) { document.getElementById('sim-card').style.display = 'none'; return; }
+  document.getElementById('sim-card').style.display = '';
+
+  const traces = [];
+  if (plantEst.before_response) {
+    traces.push({ x: plantEst.before_response.t, y: plantEst.before_response.y,
+      mode: 'lines', name: t('sim_before'), line: { color: '#ef4444', width: 2, dash: 'dot' } });
+  }
+  if (plantEst.after_response) {
+    traces.push({ x: plantEst.after_response.t, y: plantEst.after_response.y,
+      mode: 'lines', name: t('sim_after'), line: { color: '#22c55e', width: 2 } });
+  }
+  traces.push({ x: [0, 0.5], y: [1, 1], mode: 'lines', name: 'setpoint',
+    line: { color: '#4c9be8', dash: 'dash', width: 1 } });
+
+  Plotly.react('plot-sim', traces, mkLayout('normalized'), { responsive: true });
+
+  const metricsEl = document.getElementById('sim-metrics');
+  const makeMRow  = (label, before, after) => {
+    if (before == null && after == null) return '';
+    const bStr = before != null ? `<span style="color:var(--red)">${before}</span>` : '—';
+    const aStr = after  != null ? `<span style="color:var(--green)">${after}</span>` : '—';
+    return `<div><span style="color:var(--muted);font-size:11px">${label}</span><br>${bStr} → ${aStr}</div>`;
+  };
+  const bm = plantEst.before_response?.metrics || {};
+  const am = plantEst.after_response?.metrics  || {};
+  metricsEl.innerHTML = [
+    makeMRow(t('sim_overshoot'), bm.overshoot_pct  != null ? bm.overshoot_pct  + '%' : null,
+                                  am.overshoot_pct  != null ? am.overshoot_pct  + '%' : null),
+    makeMRow(t('sim_rise'),      bm.rise_time_s     != null ? bm.rise_time_s    + 's' : null,
+                                  am.rise_time_s     != null ? am.rise_time_s    + 's' : null),
+    makeMRow(t('sim_settle'),    bm.settling_time_s != null ? bm.settling_time_s + 's' : null,
+                                  am.settling_time_s != null ? am.settling_time_s + 's' : null),
+  ].join('');
+
+  const synth = plantEst.synthesized;
+  const sg    = document.getElementById('synth-gains');
+  if (synth) {
+    sg.innerHTML = `<b>${t('synth_gains_label')} [${esc(synth.axis)}]:</b> `
+      + `K=${synth.K} &nbsp; Kp=${synth.Kp} &nbsp; Ki=${synth.Ki} &nbsp; Kd=${synth.Kd} `
+      + `&nbsp;&mdash;&nbsp; <span style="color:var(--muted)">${esc(synth.note)}</span>`;
+  }
+}
+
+// ── Loop delays table ─────────────────────────────────────────────────────────
+function renderDelays(delays) {
+  const el = document.getElementById('delay-table');
+  if (!delays?.length) { el.innerHTML = `<span style="color:var(--muted)">${t('no_data')}</span>`; return; }
+  el.innerHTML = `<table><thead><tr>
+    <th>${t('delay_axis')}</th><th>${t('delay_ms')}</th>
+    <th>${t('delay_method')}</th><th>${t('delay_conf')}</th>
+    </tr></thead><tbody>
+    ${delays.map(d => `<tr>
+      <td>${t(d.axis)}</td>
+      <td><b style="color:${d.delay_ms > 15 ? 'var(--yellow)' : 'inherit'}">${d.delay_ms}</b></td>
+      <td style="font-size:11px;color:var(--muted)">${esc(d.method)}</td>
+      <td class="conf-${d.confidence}">${t('conf_' + d.confidence)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ── Offline PX4 autotune (ARX + GMVC) ─────────────────────────────────────────
+function renderAutotune(at) {
+  const card = document.getElementById('autotune-card');
+  const container = document.getElementById('autotune-axes');
+  if (!at || !at.axes || !at.axes.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const blocks = at.axes.map(ax => {
+    if (ax.accepted) {
+      const vafCls = ax.vaf_pct >= 80 ? 'conf-high' : 'conf-medium';
+      const rows = Object.entries(ax.params).map(([p, v]) => {
+        const cur = (v.current === null || v.current === undefined) ? '&mdash;' : v.current;
+        return `<tr><td>${esc(p)}</td>
+          <td style="color:var(--muted)">${cur}</td>
+          <td><b>${v.suggested}</b></td></tr>`;
+      }).join('');
+      return `<div style="margin-bottom:14px">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <b>${t(ax.axis)}</b>
+          <span class="${vafCls}" style="font-size:11px">VAF ${ax.vaf_pct}%</span>
+          <span style="font-size:11px;color:var(--muted)">
+            dt=${(ax.model_dt_s * 1000).toFixed(1)}ms &middot; &sigma;=${ax.sigma_s}s &middot; ${t('autotune_gate_ok')}
+          </span>
+        </div>
+        <table><thead><tr>
+          <th>${t('autotune_param')}</th>
+          <th>${t('autotune_current')}</th>
+          <th>${t('autotune_suggested')}</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+    }
+    return `<div style="margin-bottom:10px">
+      <b>${t(ax.axis)}</b>
+      <span class="conf-low" style="font-size:11px;margin-left:8px">${t('autotune_rejected')}</span>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">${esc(ax.reason)}</div>
+    </div>`;
+  }).join('');
+
+  const warns = (at.warnings || []).map(w =>
+    `<div style="font-size:11px;color:var(--yellow);margin-top:4px">&#9888; ${esc(w)}</div>`).join('');
+  container.innerHTML = blocks + warns;
+}
+
+// ── VIO / EV (external-vision) rendering ───────────────────────────
+// All server-derived strings pass through esc() before innerHTML interpolation.
+function renderVio(vio) {
+  const section = document.getElementById('vio-section');
+  if (!vio || !vio.capabilities || !vio.capabilities.vio_basic_available) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  const caps = vio.capabilities;
+
+  // Capability / topics-found badges
+  const capsEl = document.getElementById('vio-caps');
+  const badge = (label, on) => {
+    const color = on ? 'var(--green)' : 'var(--muted)';
+    return `<span style="padding:3px 8px;border-radius:4px;border:1px solid ${color};color:${color}">${esc(label)}</span>`;
+  };
+  capsEl.innerHTML =
+    badge('basic', caps.vio_basic_available) +
+    badge('aid_src', caps.vio_aidsrc_available) +
+    badge('EV_DELAY', caps.vio_delay_estimable) +
+    (caps.ev_velocity_fused ? badge('EV vel', true) : '');
+
+  const topicsEl = document.getElementById('vio-source-note');
+  const topics = (caps.topics_found || []).map(esc).join(', ');
+  topicsEl.innerHTML = t('vio_source_note') +
+    `<br><span style="color:var(--muted)">${t('vio_topics_found')}: ${topics}</span>`;
+
+  const warnEl = document.getElementById('vio-aidsrc-warn');
+  warnEl.textContent = caps.vio_aidsrc_available ? '' : t('vio_no_aidsrc');
+
+  renderVioTestRatios(vio.test_ratios || []);
+  renderVioBias(vio.biases || []);
+  renderVioDropouts(vio.dropouts || {}, vio.duration_s || 0);
+  renderVioDelay(vio.delay, vio.rate_latency);
+  renderVioRecs(vio.recommendations || []);
+}
+
+function renderVioTestRatios(trs) {
+  const el = document.getElementById('vio-tr-table');
+  if (!trs.length) { el.innerHTML = `<span style="color:var(--muted);font-size:11px">${t('no_data')}</span>`; return; }
+  el.innerHTML = `<table><thead><tr>
+    <th>${t('vio_tr_axis')}</th><th>${t('vio_tr_mean')}</th>
+    <th>${t('vio_tr_p95')}</th><th>${t('vio_tr_over1')}</th><th>${t('vio_tr_n')}</th>
+    </tr></thead><tbody>
+    ${trs.map(r => {
+      const over = r.pct_over_1 > 5 ? 'var(--red)' : r.pct_over_1 > 0 ? 'var(--yellow)' : 'inherit';
+      return `<tr>
+        <td>${esc(r.axis)}</td><td>${r.mean}</td><td>${r.p95}</td>
+        <td style="color:${over}"><b>${r.pct_over_1}%</b></td><td style="color:var(--muted)">${r.n}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+function renderVioBias(biases) {
+  const card = document.getElementById('vio-bias-card');
+  if (!biases.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const classColor = c => c === 'delay' ? '#ef4444' : c === 'extrinsic' ? '#eab308' : '#64748b';
+  Plotly.react('plot-vio-bias', [{
+    x: biases.map(b => b.axis),
+    y: biases.map(b => b.mean_innov),
+    type: 'bar',
+    marker: { color: biases.map(b => classColor(b.classification)) },
+    text: biases.map(b => b.classification),
+    hovertemplate: '%{x}: %{y:.3f} m (%{text})<extra></extra>',
+  }], { ...mkLayout('m'), xaxis: { ...DARK.xaxis } }, { responsive: true });
+
+  const clsLabel = c => t('vio_class_' + c);
+  const el = document.getElementById('vio-bias-table');
+  el.innerHTML = `<table><thead><tr>
+    <th>${t('vio_bias_axis')}</th><th>${t('vio_bias_mean')}</th>
+    <th>${t('vio_bias_corr')}</th><th>${t('vio_bias_class')}</th>
+    </tr></thead><tbody>
+    ${biases.map(b => `<tr>
+      <td>${esc(b.axis)}</td><td>${b.mean_innov}</td><td>${b.speed_corr}</td>
+      <td style="color:${classColor(b.classification)}"><b>${esc(clsLabel(b.classification))}</b></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function renderVioDropouts(dr, duration) {
+  const summary = document.getElementById('vio-dropout-summary');
+  const causeColor = c => c === 'dead_reckoning' || c === 'const_pos' ? '#a855f7'
+                        : c === 'reject' ? '#eab308' : '#ef4444';
+  const intervals = dr.intervals || [];
+  const span = duration > 0 ? duration : (intervals.length ? Math.max(...intervals.map(i => i.t_end)) : 1);
+
+  const shapes = intervals.map(iv => ({
+    type: 'rect', xref: 'x', yref: 'paper',
+    x0: iv.t_start, x1: iv.t_end, y0: 0, y1: 1,
+    fillcolor: causeColor(iv.cause), opacity: 0.6, line: { width: 0 },
+  }));
+  Plotly.react('plot-vio-dropout', [{
+    x: [0, span], y: [0, 0], mode: 'lines', line: { color: '#334155', width: 1 },
+    hoverinfo: 'skip', showlegend: false,
+  }], {
+    ...mkLayout(''), xaxis: { ...DARK.xaxis, title: 's', range: [0, span] },
+    yaxis: { ...DARK.yaxis, showticklabels: false, range: [0, 1] }, shapes,
+  }, { responsive: true });
+
+  summary.innerHTML = [
+    `<span style="color:var(--muted)">${t('vio_drop_n')}: </span><b>${dr.n_intervals || 0}</b>`,
+    `<span style="color:var(--muted)">${t('vio_drop_total')}: </span><b>${(dr.total_duration_s || 0).toFixed(1)}s</b>`,
+    `<span style="color:var(--muted)">${t('vio_drop_max')}: </span><b>${(dr.max_duration_s || 0).toFixed(1)}s</b>`,
+    `<span style="color:var(--muted)">${t('vio_drop_coast')}: </span><b style="color:${(dr.coasting_fraction_pct||0)>5?'var(--red)':'inherit'}">${(dr.coasting_fraction_pct || 0).toFixed(0)}%</b>`,
+  ].join(' &nbsp;·&nbsp; ');
+}
+
+function renderVioDelay(delay, rate) {
+  const body = document.getElementById('vio-delay-body');
+  if (!delay || !delay.estimable || delay.delay_ms == null) {
+    body.innerHTML = `<span style="color:var(--yellow)">${t('vio_delay_not_estimable')}</span>`;
+  } else {
+    const confColor = delay.confidence === 'high' ? 'var(--green)'
+                    : delay.confidence === 'medium' ? 'var(--yellow)' : 'var(--muted)';
+    body.innerHTML = [
+      `<span style="color:var(--muted)">${t('vio_delay_est')}: </span><b>${delay.delay_ms} ms</b>`,
+      `<span style="color:var(--muted)">${t('vio_delay_r2')}: </span><b>${delay.r_squared}</b>`,
+      `<span style="color:var(--muted)">${t('vio_delay_dyn')}: </span><b>${delay.dynamics_score}</b>`,
+      `<span class="conf-${esc(delay.confidence)}" style="color:${confColor}">${t('conf_' + delay.confidence)}</span>`,
+    ].join(' &nbsp;·&nbsp; ') +
+    (delay.note ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(delay.note)}</div>` : '');
+  }
+
+  const rEl = document.getElementById('vio-rate-body');
+  if (rate) {
+    rEl.innerHTML = [
+      `<span style="color:var(--muted)">${t('vio_rate')}: </span><b>${rate.rate_hz} Hz</b> <span style="color:var(--muted)">/ exp ${rate.expected_rate_hz} Hz</span>`,
+      `<span style="color:var(--muted)">${t('vio_latency')}: </span><b>${rate.latency_ms_median} / ${rate.latency_ms_p95} ms</b>`,
+    ].join(' &nbsp;·&nbsp; ') +
+    (rate.note ? `<div style="font-size:11px;color:var(--yellow);margin-top:4px">${esc(rate.note)}</div>` : '');
+  } else {
+    rEl.innerHTML = '';
+  }
+}
+
+function renderVioRecs(recs) {
+  const el = document.getElementById('vio-recs-table');
+  if (!recs.length) { el.innerHTML = `<span style="color:var(--muted);font-size:11px">${t('no_data')}</span>`; return; }
+  const dirIcon = d => d === 'increase' ? '▲' : d === 'decrease' ? '▼' : 'ℹ';
+  el.innerHTML = `<table><thead><tr>
+    <th>${t('vio_rec_param')}</th><th>${t('vio_rec_current')}</th>
+    <th>${t('vio_rec_suggested')}</th><th></th>
+    </tr></thead><tbody>
+    ${recs.map(r => {
+      const isNote = r.param === 'NOTE';
+      const tag = r.source_tag ? `<span style="font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:3px;padding:1px 4px;margin-left:4px">${esc(r.source_tag)}</span>` : '';
+      const cur = r.current == null ? '—' : r.current;
+      const sug = r.suggested == null ? '—' : `<b style="color:var(--green)">${r.suggested}</b>`;
+      return `<tr>
+        <td><code>${isNote ? 'NOTE' : esc(r.param)}</code>${tag} <span class="conf-${esc(r.confidence)}" style="font-size:10px">${t('conf_' + r.confidence)}</span></td>
+        <td style="color:var(--muted)">${isNote ? '' : cur}</td>
+        <td>${isNote ? dirIcon(r.direction) : sug}</td>
+        <td style="font-size:11px;color:var(--muted)">${esc(r.reason)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+// ── EKF2 aid sources (registry-driven, ULog only) ─────────────────
+// All server values pass through esc before interpolation.
+function renderAidSources(data) {
+  const body = document.getElementById('aid-body');
+  const unavail = document.getElementById('aid-unavailable');
+  if (!data || !data.available) {
+    body.style.display = 'none';
+    unavail.style.display = '';
+    return;
+  }
+  unavail.style.display = 'none';
+  body.style.display = '';
+  const sources = data.sources || [];
+
+  // Top-level coasting / fake_pos alarm (spans all sources).
+  const coast = document.getElementById('aid-coasting');
+  const tl = data.top_level || {};
+  if (tl.coasting) {
+    coast.style.display = '';
+    coast.textContent = '⚠ ' + t('aid_coasting_msg', (tl.coasting_fraction_pct || 0).toFixed(0));
+  } else {
+    coast.style.display = 'none';
+  }
+
+  // Capability badges: which sources are active vs inactive.
+  const caps = document.getElementById('aid-caps');
+  caps.innerHTML = sources.map(s => {
+    const color = s.active ? 'var(--green)' : 'var(--muted)';
+    const label = esc(s.display_name) + ' · ' + t(s.active ? 'aid_active' : 'aid_inactive');
+    return `<span style="padding:3px 8px;border-radius:4px;border:1px solid ${color};color:${color}">${label}</span>`;
+  }).join('');
+
+  document.getElementById('aid-topics').textContent =
+    t('aid_present_label') + ': ' + (data.topics_found || []).join(', ');
+
+  // Source selector — default to the first active source.
+  const keys = sources.map(s => s.key);
+  if (!aidSelected || !keys.includes(aidSelected)) {
+    const first = sources.find(s => s.active) || sources[0];
+    aidSelected = first ? first.key : null;
+  }
+  const sel = document.getElementById('aid-selector');
+  sel.innerHTML = '';
+  sources.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-neutral btn-sm';
+    btn.textContent = s.display_name;
+    btn.style.opacity = s.active ? '1' : '0.55';
+    if (s.key === aidSelected) { btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
+    btn.onclick = () => { aidSelected = s.key; renderAidSources(aidData); };
+    sel.appendChild(btn);
+  });
+
+  renderAidDetail(sources.find(s => s.key === aidSelected));
+}
+
+function renderAidDetail(s) {
+  const host = document.getElementById('aid-detail');
+  if (!s) { host.innerHTML = ''; return; }
+
+  if (!s.active) {
+    host.innerHTML = `<div class="card"><h3>${esc(s.display_name)}</h3>
+      <div class="info-box">${esc(t('aid_inactive_banner', s.inactive_reason || (s.ctrl_param + '=0')))}
+      <br><span style="color:var(--muted)">${esc(s.ctrl_param)} = ${s.ctrl_value == null ? '—' : esc(s.ctrl_value)}</span></div></div>`;
+    return;
+  }
+
+  const trs = s.test_ratios || [];
+  const trRows = trs.length ? trs.map(r => {
+    const over = r.pct_over_1 > 5 ? 'var(--red)' : r.pct_over_1 > 0 ? 'var(--yellow)' : 'inherit';
+    return `<tr><td>${esc(r.axis)}</td><td>${r.mean}</td><td>${r.p95}</td>
+      <td style="color:${over}"><b>${r.pct_over_1}%</b></td>
+      <td style="color:var(--muted)">${r.n}</td></tr>`;
+  }).join('') : `<tr><td colspan="5" style="color:var(--muted)">${t('no_data')}</td></tr>`;
+
+  const biases = s.biases || [];
+  const classColor = c => c === 'delay' ? '#ef4444' : c === 'extrinsic' ? '#eab308' : '#64748b';
+  const biasRows = biases.length ? biases.map(b => `<tr>
+      <td>${esc(b.axis)}</td><td>${b.mean_innov}</td><td>${b.speed_corr}</td>
+      <td style="color:${classColor(b.classification)}"><b>${esc(t('aid_class_' + b.classification))}</b></td>
+    </tr>`).join('') : `<tr><td colspan="4" style="color:var(--muted)">${t('no_data')}</td></tr>`;
+
+  const dr = s.dropouts || {};
+  const dropLine = [
+    `<span style="color:var(--muted)">${t('aid_drop_n')}: </span><b>${dr.n_intervals || 0}</b>`,
+    `<span style="color:var(--muted)">${t('aid_drop_total')}: </span><b>${(dr.total_duration_s || 0).toFixed(1)}s</b>`,
+    `<span style="color:var(--muted)">${t('aid_drop_max')}: </span><b>${(dr.max_duration_s || 0).toFixed(1)}s</b>`,
+  ].join(' &nbsp;·&nbsp; ');
+  const dropList = (dr.intervals || []).slice(0, 12).map(iv =>
+    `<div style="font-size:11px;color:var(--muted)">${iv.t_start}s → ${iv.t_end}s (${iv.duration_s}s) · ${esc(iv.cause)}</div>`).join('');
+
+  // Delay / NEES / rate
+  const d = s.delay || {};
+  const delayHtml = (d.estimable && d.delay_ms != null)
+    ? `<b>${d.delay_ms} ms</b> <span style="color:var(--muted)">${t('aid_delay_r2')}=${d.r_squared} · ${esc(d.confidence)}</span>`
+    : `<span style="color:var(--yellow)">${t('aid_delay_not')}</span>`;
+  const nees = s.nees || [];
+  const neesHtml = nees.length ? nees.map(n =>
+    `<b>${n.mean_nis}</b> / DOF ${n.dof} <span style="color:${n.verdict==='ok'?'var(--green)':'var(--yellow)'}">${esc(n.verdict)}</span>`).join(' · ')
+    : `<span style="color:var(--muted)">${t('aid_nees_none')}</span>`;
+  const rateHtml = s.rate ? `<b>${s.rate.rate_hz} Hz</b> <span style="color:var(--muted)">(${s.rate.n_samples})</span>`
+    : `<span style="color:var(--muted)">—</span>`;
+
+  const recs = s.recommendations || [];
+  const dirIcon = x => x === 'increase' ? '▲' : x === 'decrease' ? '▼' : 'ℹ';
+  const recRows = recs.length ? recs.map(r => {
+    const isNote = r.param === 'NOTE';
+    const cur = r.current == null ? '—' : r.current;
+    const sug = r.suggested == null ? '—' : `<b style="color:var(--green)">${r.suggested}</b>`;
+    return `<tr>
+      <td><code>${isNote ? 'NOTE' : esc(r.param)}</code> <span class="conf-${esc(r.confidence)}" style="font-size:10px">${t('conf_' + r.confidence)}</span></td>
+      <td style="color:var(--muted)">${isNote ? '' : cur}</td>
+      <td>${isNote ? dirIcon(r.direction) : sug}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(r.reason)}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="4" style="color:var(--muted)">${t('aid_no_recs')}</td></tr>`;
+
+  host.innerHTML = `
+    <div class="card">
+      <h3>${esc(s.display_name)} <span style="font-size:11px;color:var(--muted)">${esc(s.ctrl_param)}=${s.ctrl_value == null ? '?' : esc(s.ctrl_value)}</span></h3>
+    </div>
+    <div class="card"><h3>${t('aid_tr_title')}</h3>
+      <table><thead><tr><th>${t('aid_axis')}</th><th>${t('aid_mean')}</th><th>${t('aid_p95')}</th><th>${t('aid_over1')}</th><th>${t('aid_n')}</th></tr></thead>
+      <tbody>${trRows}</tbody></table></div>
+    <div class="card"><h3>${t('aid_bias_title')}</h3>
+      <table><thead><tr><th>${t('aid_axis')}</th><th>${t('aid_bias_mean')}</th><th>${t('aid_bias_corr')}</th><th>${t('aid_bias_class')}</th></tr></thead>
+      <tbody>${biasRows}</tbody></table></div>
+    <div class="card"><h3>${t('aid_drop_title')}</h3>
+      <div style="font-size:12px">${dropLine}</div>
+      <div style="margin-top:6px">${dropList}</div></div>
+    <div class="card"><h3>${t('aid_delay_title')}</h3>
+      <div style="font-size:12px"><span style="color:var(--muted)">${t('aid_delay_est')}: </span>${delayHtml}</div>
+      <div style="font-size:12px;margin-top:4px"><span style="color:var(--muted)">${t('aid_nees_label')}: </span>${neesHtml}</div>
+      <div style="font-size:12px;margin-top:4px"><span style="color:var(--muted)">${t('aid_rate_label')}: </span>${rateHtml}</div></div>
+    <div class="card"><h3>${t('aid_recs_title')}</h3>
+      <table><thead><tr><th>${t('aid_rec_param')}</th><th>${t('aid_rec_current')}</th><th>${t('aid_rec_suggested')}</th><th></th></tr></thead>
+      <tbody>${recRows}</tbody></table></div>`;
+}
+
+function updateTopicList(status) {
+  const el = document.getElementById('topic-list');
+  el.innerHTML = Object.entries(status).map(([k, v]) => {
+    const cls = v === 'active' ? 'topic-active'
+              : v === 'subscribed' ? 'topic-subscribed'
+              : 'topic-error';
+    return `<div><span class="topic-dot ${cls}"></span>${esc(k.replace(/([A-Z])/g,' $1').trim())}</div>`;
+  }).join('');
+}
+
+// ── history + comparison ──────────────────────────────────────────────────────
+async function refreshHistory() {
+  const r = await api('/api/runs');
+  if (!r.ok) return;
+  const runs = await r.json();
+  const el = document.getElementById('history-list');
+  const names = Object.keys(runs);
+
+  if (!names.length) {
+    el.innerHTML = '<div class="info-box">' + t('no_runs') + '</div>';
+    document.getElementById('compare-card').style.display = 'none';
+    return;
+  }
+
+  el.innerHTML = `<table>
+    <thead><tr><th>${t('th_run')}</th><th>${t('th_timestamp')}</th><th>${t('th_frames')}</th><th>${t('th_recs')}</th></tr></thead>
+    <tbody>${names.map(n => {
+      const v = runs[n];
+      return `<tr>
+        <td>${esc(n)}</td>
+        <td style="font-size:11px">${esc(v.timestamp)}</td>
+        <td>${v.n_frames}</td>
+        <td>${v.n_recommendations}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+
+  if (names.length >= 2) {
+    document.getElementById('compare-card').style.display = 'block';
+    const optHtml = names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    document.getElementById('cmp-run-a').innerHTML = optHtml;
+    document.getElementById('cmp-run-b').innerHTML = optHtml;
+    document.getElementById('cmp-run-b').selectedIndex = 1;
+
+    Plotly.newPlot('plot-compare', [], {
+      ...mkLayout('value'),
+      title: { text: t('select_runs'), font:{size:11,color:'#94a3b8'} }
+    }, { responsive: true });
+  }
+}
+
+async function runComparison() {
+  const runA   = document.getElementById('cmp-run-a').value;
+  const runB   = document.getElementById('cmp-run-b').value;
+  const signal = document.getElementById('cmp-signal').value;
+  const status = document.getElementById('compare-status');
+
+  if (runA === runB) {
+    status.textContent = t('select_diff_runs');
+    return;
+  }
+  status.textContent = t('compare_loading');
+
+  try {
+    const [rA, rB] = await Promise.all([
+      api(`/api/runs/${encodeURIComponent(runA)}/timeseries?signal=${signal}`).then(r => r.json()),
+      api(`/api/runs/${encodeURIComponent(runB)}/timeseries?signal=${signal}`).then(r => r.json()),
+    ]);
+
+    const t0A = rA.t[0] ?? 0;
+    const t0B = rB.t[0] ?? 0;
+
+    Plotly.react('plot-compare', [
+      {
+        x: rA.t.map(t => +(t - t0A).toFixed(3)),
+        y: rA.y,
+        mode: 'lines', name: runA,
+        line: { color: '#4c9be8', width: 1.5 }
+      },
+      {
+        x: rB.t.map(t => +(t - t0B).toFixed(3)),
+        y: rB.y,
+        mode: 'lines', name: runB,
+        line: { color: '#f97316', width: 1.5 }
+      }
+    ], {
+      ...mkLayout(signal.includes('rate') ? 'rad/s' : signal.includes('torque') ? 'norm' : 'value'),
+      title: { text: t('cmp_title', signal), font:{size:11,color:'#94a3b8'} },
+      legend: { bgcolor:'transparent', orientation:'h', x:0, y:1.12 }
+    }, { responsive: true });
+
+    status.textContent = t('cmp_samples', rA.t.length, rB.t.length);
+  } catch(e) {
+    status.textContent = t('cmp_error', e.message);
+  }
+}
+
+// ── downloads ─────────────────────────────────────────────────────────────────
+function dl(type) {
+  window.location = withToken(`/api/download/${type}`);
+}
+
+// ── poll status for topic list ────────────────────────────────────────────────
+setInterval(async () => {
+  const r = await api('/api/status');
+  if (!r.ok) return;
+  const d = await r.json();
+  updateTopicList(d.topic_status || {});
+}, 3000);
+
+// ── init ───────────────────────────────────────────────────────────────────────
+document.getElementById('api-token').value = getToken();
+switchAxis('roll');
+applyLang();
+</script>
+</body>
+</html>

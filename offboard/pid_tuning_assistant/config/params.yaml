@@ -1,0 +1,93 @@
+# PID Tuning Assistant — runtime config
+
+web_host: "0.0.0.0"
+web_port: 8086   # 8080 is taken by web_video_server in the sverk stack
+
+# Optional API token. If set (here or via env PID_ASSIST_TOKEN — env wins), every
+# /api/* route requires `Authorization: Bearer <token>` (or ?token= for download
+# links / the WebSocket). Empty → no auth (a startup warning is logged). The node
+# listens on 0.0.0.0 inside a privileged on-board container, so set this on any
+# shared network.
+auth_token: ""
+
+# Recording buffer size
+buffer_maxlen: 300000   # ~50 min at 100 Hz
+
+# Max recorded/uploaded runs kept in memory at once. Each run retains its full
+# frame list, so an unbounded History leaks RAM until the companion OOMs. When
+# exceeded, the oldest run is evicted (its analysis/exports become unavailable;
+# the UI History tab handles this — evicted runs simply disappear from the list).
+max_runs_in_memory: 5
+
+# Max accepted ULog upload size (MB). Guards SBC RAM (1–4 GB) — pyulog builds
+# full-size arrays in memory, so an unbounded upload can OOM the companion.
+# Exceeding this returns HTTP 413.
+max_ulog_mb: 256
+
+# Vehicle profile — shifts all thresholds.  Options: default | racer | cinematic
+vehicle_profile: "default"
+
+# Expected external-vision (EV) publish rate for the VIO/EV analysis tab (Hz).
+# NOT hardcoded to 30 (that is the ArUco/VPE cadence): 2D-lidar scan-match ~10–12,
+# 3D SLAM ~10–20, mocap 100+.  The VIO analyzer compares the measured EV rate
+# (from vehicle_visual_odometry) against this value.
+vio_expected_rate_hz: 30
+
+# Step detection thresholds (applied before per-profile scaling)
+step_threshold_rate_rad_s: 0.15   # minimum setpoint jump to qualify as a step (rad/s)
+step_threshold_att_rad:    0.05   # ~3 degrees
+step_analysis_window_s:    2.5    # analysis window after step
+settling_band:             0.05   # ±5 % of step amplitude
+
+# Minimum step gap to avoid counting the same input twice
+min_step_gap_s: 1.0
+
+# Data-quality gates — below these values confidence is downgraded
+min_rate_hz_for_spectral:    10.0   # Hz; below → skip spectral, report "link too slow"
+min_events_for_high_conf:     3     # n_events; below → confidence max = medium
+min_r2_for_model_suggestion: 0.60   # R²; below → only direction, no suggested value
+max_jitter_pct_for_high_conf: 20.0  # %; above → downgrade confidence one step
+max_drop_pct_for_high_conf:   15.0  # %; above → downgrade confidence one step
+
+# Vehicle profiles
+# Each profile overrides the following rule thresholds.
+# Relative thresholds reduce false positives for non-default vehicle types.
+vehicle_profiles:
+  default:
+    overshoot_warn_pct:   20.0   # above → recommend reducing K
+    overshoot_high_pct:   40.0   # above → high-confidence recommendation
+    rise_time_slow_s:     0.35   # above → recommend increasing K
+    settling_slow_s:      1.5    # above → recommend investigating I / D
+    noise_warn:           0.08   # above → D or filter issue
+    noise_high:           0.15   # above → high-confidence D/filter issue
+    ss_error_rad_s:       0.05   # above (steady hold) → recommend increasing I
+  racer:
+    overshoot_warn_pct:   30.0
+    overshoot_high_pct:   55.0
+    rise_time_slow_s:     0.20
+    settling_slow_s:      0.80
+    noise_warn:           0.12
+    noise_high:           0.22
+    ss_error_rad_s:       0.08
+  cinematic:
+    overshoot_warn_pct:   10.0
+    overshoot_high_pct:   20.0
+    rise_time_slow_s:     0.50
+    settling_slow_s:      2.0
+    noise_warn:           0.05
+    noise_high:           0.10
+    ss_error_rad_s:       0.03
+
+# nav_state → human label (PX4 v1.15)
+nav_state_map:
+  0:  "MANUAL"
+  1:  "ALTCTL"
+  2:  "POSCTL"
+  3:  "AUTO_MISSION"
+  4:  "AUTO_LOITER"
+  5:  "AUTO_RTL"
+  10: "ACRO"
+  14: "OFFBOARD"
+  15: "STAB"
+  17: "AUTO_TAKEOFF"
+  18: "AUTO_LAND"

@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "meta": {
+    "run_name": "run_20241215_143022",
+    "timestamp": "2024-12-15T14:30:22",
+    "params_loaded": true,
+    "params": {
+      "MC_ROLLRATE_K": 1.0,
+      "MC_ROLLRATE_P": 0.15,
+      "MC_ROLLRATE_I": 0.26,
+      "MC_ROLLRATE_D": 0.003,
+      "MC_PITCHRATE_K": 1.0,
+      "MC_PITCHRATE_P": 0.15,
+      "MC_PITCHRATE_I": 0.26,
+      "MC_PITCHRATE_D": 0.003,
+      "MC_YAWRATE_K": 1.0,
+      "MC_YAWRATE_P": 0.2,
+      "MC_YAWRATE_I": 0.1,
+      "MC_YAWRATE_D": 0.0,
+      "MC_ROLL_P": 6.5,
+      "MC_PITCH_P": 6.5,
+      "MC_YAW_P": 2.8
+    },
+    "topic_status": {
+      "VehicleAngularVelocity": "active",
+      "VehicleAttitude": "active",
+      "VehicleStatus": "active",
+      "BatteryStatus": "active",
+      "VehicleLocalPosition": "active",
+      "ActuatorMotors": "active",
+      "VehicleRatesSetpoint": "active",
+      "VehicleAttitudeSetpoint": "active",
+      "RateCtrlStatus": "active",
+      "VehicleTorqueSetpoint": "active"
+    },
+    "n_frames": 15000
+  },
+  "warnings": [],
+  "segments": [
+    {
+      "mode": "STAB",
+      "axis": "roll",
+      "n_events": 5,
+      "metrics": {
+        "overshoot_pct_mean": 28.3,
+        "overshoot_pct_max": 35.1,
+        "rise_time_mean_s": 0.08,
+        "settling_time_mean_s": 0.72,
+        "rms_error_mean": 0.0412,
+        "dominant_freq_hz": 4.2,
+        "noise_rms": 0.0082,
+        "control_effort": 0.31
+      },
+      "events": [
+        {
+          "axis": "roll",
+          "t_start": 12.34,
+          "t_end": 14.84,
+          "sp_before": 0.0,
+          "sp_after": 0.52,
+          "step_size": 0.52,
+          "overshoot_pct": 31.2,
+          "rise_time_s": 0.076,
+          "settling_time_s": 0.68,
+          "steady_state_error": 0.0021,
+          "rms_error": 0.0398,
+          "dominant_freq_hz": 4.1,
+          "damping_ratio": 0.38,
+          "noise_rms": 0.0079,
+          "control_effort": 0.29
+        }
+      ]
+    },
+    {
+      "mode": "POSCTL",
+      "axis": "roll",
+      "n_events": 2,
+      "metrics": {
+        "overshoot_pct_mean": 35.5,
+        "overshoot_pct_max": 38.0,
+        "rise_time_mean_s": 0.074,
+        "settling_time_mean_s": 1.2,
+        "rms_error_mean": 0.051,
+        "dominant_freq_hz": 4.5,
+        "noise_rms": 0.009,
+        "control_effort": 0.34
+      },
+      "events": []
+    }
+  ],
+  "recommendations": [
+    {
+      "axis": "roll",
+      "param": "MC_ROLLRATE_K",
+      "current": 1.0,
+      "suggested": 0.85,
+      "delta_pct": -15.0,
+      "direction": "decrease",
+      "reason": "Sustained oscillation at 4.2 Hz (damping=0.38). Reduce rate gain K in steps of ~0.02.",
+      "evidence": "mode=STAB, n_events=5, overshoot=28.3%, rise_time=0.080s, settling=0.720s, dominant_freq=4.20Hz, noise_rms=0.00820",
+      "confidence": "high"
+    },
+    {
+      "axis": "roll",
+      "param": "MC_ROLLRATE_D",
+      "current": 0.003,
+      "suggested": 0.00345,
+      "delta_pct": 15.0,
+      "direction": "increase",
+      "reason": "High overshoot — increasing D can add damping without slowing rise.",
+      "evidence": "mode=STAB, n_events=5, overshoot=28.3%, rise_time=0.080s, settling=0.720s, dominant_freq=4.20Hz, noise_rms=0.00820",
+      "confidence": "medium"
+    }
+  ],
+  "disclaimer": "These recommendations are heuristic starting points only. Change one parameter at a time. Test in SITL before real flight."
+}

@@ -1,0 +1,38 @@
+# PX4 Multicopter PID Tuning Analysis — run_20241215_143022
+Date: 2024-12-15T14:30:22
+
+## Vehicle / Sensor setup
+- Frame: quadcopter (X configuration assumed)
+- Sensors: Optical Flow + Distance Sensor (no GPS)
+- Firmware: PX4 v1.15 (Humble uXRCE-DDS bridge)
+- Available flight modes: Stabilized / Altitude / Position
+
+## Current PID parameters
+ROLL  rate: K=1.0  P=0.15  I=0.26  D=0.003  | att_P=6.5
+PITCH rate: K=1.0  P=0.15  I=0.26  D=0.003  | att_P=6.5
+YAW   rate: K=1.0  P=0.20  I=0.10  D=0.000  | att_P=2.8
+
+## Recorded metrics (per mode × axis)
+  [STAB][roll]  n=5  overshoot=28.3%  rise=0.080s  settling=0.720s  rms_err=0.0412  freq=4.20Hz  noise=0.00820
+  [STAB][pitch] n=4  overshoot=24.1%  rise=0.085s  settling=0.650s  rms_err=0.0388  freq=3.90Hz  noise=0.00770
+  [STAB][yaw]   n=3  overshoot=8.2%   rise=0.180s  settling=0.410s  rms_err=0.0210  freq=0.80Hz  noise=0.00310
+  [ALTCTL][roll]  n=2  overshoot=31.0%  rise=0.078s  settling=0.890s  rms_err=0.0450  freq=4.30Hz  noise=0.00850
+  [POSCTL][roll]  n=2  overshoot=35.5%  rise=0.074s  settling=1.200s  rms_err=0.0510  freq=4.50Hz  noise=0.00900
+
+## Heuristic recommendations (from analysis engine)
+  [roll] MC_ROLLRATE_K: 1.0 → 0.85 (-15%) | high confidence | Sustained oscillation at 4.2 Hz (damping=0.38). Reduce rate gain K in steps of ~0.02.
+  [roll] MC_ROLLRATE_D: 0.003 → 0.00345 (+15%) | medium confidence | High overshoot — increasing D can add damping without slowing rise.
+  [pitch] MC_PITCHRATE_K: 1.0 → 0.8 (-20%) | high confidence | Overshoot 24% > 20%. Reduce K; alternatively raise D.
+  [pitch] MC_PITCHRATE_D: 0.003 → 0.00345 (+15%) | medium confidence | High overshoot — increasing D can add damping.
+  NOTE [roll]: [roll] Rate loop looks acceptable in Stabilized but degrades in Position. This pattern suggests the inner rate loop is marginal under the additional outer-loop setpoints. Check rate_K and D noise.
+
+## Warnings
+  none
+
+## Question for the LLM
+Given the metrics above, which PID gains should be adjusted, by how much, and in which order?
+Please explain the reasoning, cross-reference the dominant-frequency and damping information,
+and flag any parameters that look problematic but have insufficient data to recommend confidently.
+Remind the user: change one parameter at a time; test in SITL (Gazebo) before real flight.
+
+DISCLAIMER: This analysis is heuristic and must be validated by a qualified pilot/engineer.
