@@ -1,0 +1,20 @@
+ld19_lidar_node:
+  ros__parameters:
+    connection_mode: usb
+    port_name: ""
+    usb_port_name: /dev/ttyUSB0
+    uart_port_candidates:
+      - /dev/ttyAMA3
+      - /dev/ttyAMA0
+      - /dev/serial0
+      - /dev/ttyAMA10
+      - /dev/ttyS0
+    baudrate: 230400
+    frame_id: ld19_frame
+    topic_name: /ld19_lidar/scan
+    scan_bins: 720
+    range_min_m: 0.02
+    range_max_m: 12.0
+    clockwise_data: true
+    read_chunk_size: 256
+    read_timer_period_sec: 0.01
