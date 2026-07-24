@@ -1,0 +1,3 @@
+[submodule "pyuwb"]
+	path = pyuwb
+	url = https://git.sverk.io/uwb/pyuwb

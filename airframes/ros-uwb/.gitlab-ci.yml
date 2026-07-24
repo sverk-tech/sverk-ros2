@@ -1,0 +1,34 @@
+image: ros:jazzy
+
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  before_script:
+    - apt-get update -q
+    - rosdep update --rosdistro jazzy
+    - rosdep install --from-paths . --ignore-src -y
+    - source /opt/ros/jazzy/setup.bash
+  script:
+    - colcon build --packages-select ros_uwb
+  artifacts:
+    paths:
+      - install/
+      - build/
+    expire_in: 1 hour
+
+test:
+  stage: test
+  before_script:
+    - source /opt/ros/jazzy/setup.bash
+    - source install/setup.bash
+  script:
+    - colcon test --packages-select ros_uwb --event-handlers console_direct+
+    - colcon test-result --verbose
+  artifacts:
+    when: always
+    reports:
+      junit: build/ros_uwb/test_results/ros_uwb/*.xml
+    expire_in: 1 hour

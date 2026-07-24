@@ -1,0 +1,60 @@
+# ==== ROS / Catkin ====
+build/
+devel/
+install/
+log/
+
+# catkin tools
+.catkin_tools/
+
+# ==== Python ====
+__pycache__/
+*.py[cod]
+*$py.class
+
+# virtualenv
+venv/
+env/
+.venv/
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==== IDE ====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==== OS ====
+.DS_Store
+Thumbs.db
+
+# ==== Logs ====
+*.log
+
+# ==== ROS bag files ====
+*.bag
+
+# ==== CMake ====
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# ==== Testing ====
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+
+# ==== Misc ====
+*.egg-info/
+dist/
+
+# ==== Serial / temp dumps ====
+*.bin
+*.dat
+*.out
