@@ -1,7 +1,7 @@
 [submodule "px4/px4_msgs"]
 	path = px4/px4_msgs
-	url = https://github.com/PX4/px4_msgs.git
-	branch = release/1.15
+	url = https://github.com/petayyyy/px4_msgs.git
+	branch = sverk-v1.15.4
 [submodule "px4/px4_ros_com"]
 	path = px4/px4_ros_com
 	url = https://github.com/PX4/px4_ros_com.git
@@ -21,4 +21,12 @@
 [submodule "odometry/vpe/px4-ros2-interface-lib"]
 	path = odometry/vpe/px4-ros2-interface-lib
 	url = https://github.com/petayyyy/px4-ros2-interface-lib.git
+	branch = main
+[submodule "peripheral/mipi_csi_cam_ros2"]
+	path = peripheral/mipi_csi_cam_ros2
+	url = https://github.com/petayyyy/mipi_csi_cam_ros2
+	branch = main
+[submodule "peripheral/a733_csi_cam_ros2"]
+	path = peripheral/a733_csi_cam_ros2
+	url = https://github.com/petayyyy/a733_csi_cam_ros2
 	branch = main
