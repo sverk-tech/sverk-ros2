@@ -2,7 +2,7 @@ from setuptools import setup
 import os
 from glob import glob
 
-package_name = 'fmu_calibration_control'
+package_name = 'fmu_control'
 
 setup(
     name=package_name,
@@ -22,7 +22,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'calibration_control = fmu_calibration_control.calibration_control_node:main',
+            'calibration_control = fmu_control.calibration_control_node:main',
         ],
     },
 )
