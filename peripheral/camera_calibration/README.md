@@ -1,97 +1,293 @@
-# Пакет для калибровки камеры camera_calibration
-## 1. Как начать пользоваться:
-1. Соберите пакет, "colcon build --packages-select camera_calibration" (в активной директории воркспейса "sverk_ws");
-2. Запустите ноду пакета командой "ros2 launch camera_calibration calibration.launch.py", при необходимости укажите нужные аргументы, значения по-умолчанию которых вам не подходят (например, топик изображения с камеры или путь к директории для выходных файлов), ознакомиться с ними можно прочитав лаунч-файл "./launch/calibration.launch.py";
-3. Ознакомьтесь с сервисами, которые предоставляет нода для калибровки камеры - "ros2 node info /camera_calibration" (с разъяснением функций каждого из сервисов см. в пункте 2 настоящего документа), сервисы - ваш способ взаимодействия с нодой;
-4. Воспользуйтесь командами "ros2 param dump /calibration" и "ros2 topic list", убедитесь что названия топика изображения с камеры совпадают, при необходимости перезапустите пакет с нужным значением аргумента или же измените значение параметра командой "ros2 param set /camera_calibration <parameter_name> <value>";
-5. Вызовите сервис "/calibration/get_state", чтобы увидеть установленные конфигурационные параметры ноды;
-6. Начните работу с нодой для калибровки камеры, активировав новую сессию с помощью сервиса "/calibration/start_session";
-7. Вызовите сервис "/calibration/reset_session", чтобы перезапустить сессию (это сбросит все записанные кадры и конфигурационные параметры, которые вы еще не заполняли, если последовательно следуете этому гайду)
-8. Вызовите сервис "/calibration/set_config", (расшифровку параметров сервиса и примеры тел для вызова (JSON запрос) см. в пунктах 2, 3);
-9. Используйте любой доступный для вас интерфейс для просмотра изображения из ROS-топиков, чтобы удобно собрать набор изображений для калибровки (например "rviz", веб-приложение Sverk или что-то иное), camera_calibration_node может публиковать превью изображение в топик "/calibration/processed_image";
-10. Вызовите сервис "/calibration/calibrate" для захвата одного изображения (в поле зрения камеры должна располагаться калибровочная доска, параметры которой вы внесли в предыдущем шаге);
-11. Вызовите сервис "/calibration/set_auto_capture" для автоматического захвата изображений (с интервалом, указанным в теле вызова);
-12. Если вы собрали набор изображений, вызовите сервис "/calibration/calibrate", который выполнит калибровку по собранному вами набору изображений и вернет значения метрик, характеризующих качество калибровки;
-13. Если вас не устраивают полученные метрики, попробуйте отредактировать ваш набор изображений, вызвав "/calibration/list_captures" для отображения списка захваченных изображений и "/calibration/remove_capture" (вы, вероятно, захотите воспользоваться файловым и посмотреть изображения перед тем, как их удалить), после чего захватите новые кадры и попробуйте выполнить калибровку снова;
-14. Вызовите сервис "/calibration/save", чтобы сохранить калибровочный файл для вашей камеры, он будет сохранен в директорию, указанную в параметрах ноды с названием "latest_calibration.yaml";
-15. Используйте калибровочный файл как вам нужно, укажите пакету-драйверу камеры ("camera_ros") путь к этому файлу при запуске, или же поместите его в директорию, откуда "camera_ros" возьмет его по-умолчанию.
+# Camera Calibration
 
-## 2. Сервисы и их параметры:
+ROS 2-нода для калибровки камеры дрона по калибровочной доске. Поддерживает четыре типа досок (**chessboard, charuco, circles, acircles**) и две модели камеры (**pinhole, fisheye**), онлайн-захват кадров с превью и авто-захватом, калибровку с **авто-отсевом кадров-выбросов**, экспорт в ROS-совместимый YAML и **авто-деплой** результата в config-папки драйвера камеры. Есть офлайн-режим (калибровка по готовой папке кадров) и отдельный инструмент верификации калибровочного файла.
 
-| Сервис                        | Параметры тела вызова<br>---<br>возвращаемые параметры | Что делает |
-|-------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| /calibration/start_session    | --- <br>bool success <br>string message | Начинает новую сессию, для неё создаётся новая директория в `output_dir`. |
-| /calibration/reset_session    | --- <br>bool success<br>string message | Сбрасывает текущую сессию и очищает захваченные данные. |
-| /calibration/capture          | --- <br>bool success <br>string message | Захватывает один кадр, сохраняет его если параметр `save_captures = true`, возвращает `success = false`, если обнаружить калибровочную доску не удалось. |
-| /calibration/calibrate        | --- <br>bool success<br>string message | Выполняет калибровку по захваченным кадрам. |
-| /calibration/save             | --- <br>bool success<br>string message | Сохраняет калибровочный файл (YAML) в `output_dir`. |
-| /calibration/get_state        | --- <br>bool success <br>string state_json | Возвращает текущее состояние ноды в формате JSON. |
-| /calibration/list_captures    | --- <br>bool success <br>string[] captures | Возвращает список захваченных кадров. |
-| /calibration/remove_capture   | int32 index<br>--- <br>bool success <br>string message | Удаляет захваченный кадр под указанным индексом. |
-| /calibration/set_auto_capture | bool enable <br>float32 period_sec <br>--- <br>bool success <br>string message | Альтернативный способ захвата кадров, автоматически делает попытку захвата один раз в указанный интервал. |
-| /calibration/set_config       | string board_type <br>string camera_model <br>int32 board_width <br>int32 board_height <br>float32 square_size <br>float32 marker_size <br>string aruco_dict <br>int32 min_frames <br>bool save_captures <br>--- <br>bool success <br>string message | Устанавливает конфигурацию для активной калибровочной сессии. `board_type ∈ {"charuco", "chessboard", "circles", "acircles"}`. `camera_model ∈ {"fisheye", "pinhole"}`. `min_frames` — параметр, при достижении которого автоматический захват останавливается. |
+---
 
-## 3. Примеры конфигурационных параметров для различных типов калибровочных досок:
-### Шахматная доска
+## Содержание
+
+- [Требования](#требования)
+- [Сборка](#сборка)
+- [Запуск](#запуск)
+- [Параметры ноды и launch](#параметры-ноды-и-launch)
+- [Сервисы](#сервисы)
+- [Топики](#топики)
+- [Конфигурации калибровочных досок](#конфигурации-калибровочных-досок)
+- [Авто-отсев выбросов](#авто-отсев-выбросов)
+- [Авто-деплой в драйвер камеры](#авто-деплой-в-драйвер-камеры)
+- [Офлайн-калибровка по папке](#офлайн-калибровка-по-папке)
+- [Верификация калибровки](#верификация-калибровки)
+- [Типичный сценарий](#типичный-сценарий)
+- [Инструменты и тесты](#инструменты-и-тесты)
+
+---
+
+## Требования
+
+- ROS 2 (Humble / совместимый)
+- OpenCV с модулем `aruco` (в образе — `python3-opencv` 4.5.4), `cv_bridge`, `numpy`, `PyYAML`
+- Пакеты: `rclpy`, `sensor_msgs`, `std_msgs`, `std_srvs`, `cv_bridge`
+- Источник изображения — топик `sensor_msgs/msg/Image` (драйвер камеры уже запущен)
+
+---
+
+## Сборка
+
+Из корня workspace:
+
+```bash
+cd ~/sverk_ws
+source /opt/ros/humble/setup.bash
+colcon build --packages-select camera_calibration
+source install/setup.bash
 ```
-{
-  "board_type": "chessboard",
-  "camera_model": "pinhole",
-  "board_width": 10,
-  "board_height": 7,
-  "square_size": 0.022,
-  "marker_size": 0,
-  "aruco_dict": "",
-  "min_frames": 5,
-  "save_captures": true
-}
+
+---
+
+## Запуск
+
+### Онлайн-калибровка (захват кадров с живой камеры)
+
+```bash
+ros2 launch camera_calibration calibration.launch.py \
+  image_topic:=/camera_1/image_raw
 ```
-Поля, связанные с ArUco маркерами ("board_type", "marker_size") можно заполнить произвольными значениями, т.к. маркеры используются только в типе калибровочной доски - "charuco".
-### Шахматная доска с аруко-маркерами
+
+С конфигурацией доски и авто-деплоем сразу из launch (без сервисных вызовов):
+
+```bash
+ros2 launch camera_calibration calibration.launch.py \
+  image_topic:=/camera_1/image_raw \
+  board_type:=charuco camera_model:=fisheye \
+  board_width:=11 board_height:=8 square_size:=0.022 marker_size:=0.016 \
+  aruco_dict:=DICT_4X4_50 sensor_name:=imx219 \
+  auto_deploy:=true auto_deploy_max_reproj:=1.0
 ```
-{
-  "board_type": "charuco",
-  "camera_model": "pinhole",
-  "board_width": 11,
-  "board_height": 8,
-  "square_size": 0.022,
-  "marker_size": 0.016,
-  "aruco_dict": "DICT_4X4_50",
-  "min_frames": 5,
-  "save_captures": true
-}
+
+### Офлайн-калибровка по папке с готовыми кадрами
+
+```bash
+ros2 launch camera_calibration calibrate_from_dir.launch.py \
+  input_dir:=/home/sverk/camera_calibrations/sessions/<id>/captures \
+  board_type:=charuco camera_model:=fisheye \
+  board_width:=11 board_height:=8 square_size:=0.022 marker_size:=0.016 \
+  aruco_dict:=DICT_4X4_50 sensor_name:=imx219 \
+  deploy_driver_package:=mipi_csi_cam_ros2
 ```
-###  Калибровочная доска с кругами
+
+Нода читает картинки из папки, калибрует, сохраняет YAML, деплоит и завершается. См. [Офлайн-калибровка по папке](#офлайн-калибровка-по-папке).
+
+### Верификация готового YAML
+
+```bash
+ros2 run camera_calibration verify_calibration_node.py \
+  --file ~/camera_calibrations/latest_calibration.yaml
 ```
-{
-  "board_type": "circles",
-  "camera_model": "pinhole",
-  "board_width": 11,
-  "board_height": 8,
-  "square_size": 0.022,
-  "marker_size": 0,
-  "aruco_dict": "",
-  "min_frames": 5,
-  "save_captures": true
-}
+
+---
+
+## Параметры ноды и launch
+
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|--------------|----------|
+| `image_topic` | string | `/image/raw` | Топик изображения камеры |
+| `output_dir` | string | `~/camera_calibrations` | Каталог для сессий и YAML |
+| `camera_name` | string | `calibrated_camera` | Имя камеры в YAML |
+| `frame_id` | string | `camera_optical_1` | frame_id для превью-изображения |
+| `preview_rate_hz` | double | 5.0 | Частота публикации превью (0 — выкл.) |
+| `publish_preview_when_idle` | bool | true | Публиковать превью вне активной сессии |
+| `min_charuco_corners` | int | 10 | Минимум углов charuco для приёма кадра |
+| `board_type` | string | `chessboard` | Тип доски: `chessboard`/`charuco`/`circles`/`acircles` |
+| `camera_model` | string | `pinhole` | Модель камеры: `pinhole`/`fisheye` |
+| `board_width` | int | 9 | Ширина доски (клетки/углы — см. тип) |
+| `board_height` | int | 6 | Высота доски |
+| `square_size` | double | 0.024 | Размер клетки / шаг кругов (м) |
+| `marker_size` | double | 0.018 | Размер ArUco-маркера (charuco, м) |
+| `aruco_dict` | string | `DICT_4X4_50` | Словарь ArUco (charuco) |
+| `min_frames` | int | 15 | Порог кадров для остановки авто-захвата |
+| `max_frame_reproj` | double | 2.0 | Порог авто-отсева выбросов (px); 0 — выкл. |
+| `auto_deploy` | bool | false | Авто-деплой при `reproj <= auto_deploy_max_reproj` |
+| `auto_deploy_max_reproj` | double | 1.0 | Порог reproj для авто-деплоя (px) |
+| `deploy_driver_package` | string | `a733_csi_cam_ros2` | Пакет драйвера — цели деплоя (install+src) |
+| `workspace_src` | string | `/home/sverk/sverk_ws/src` | Корень src для поиска config драйвера |
+| `deploy_config_dir` | string | `` | Доп. путь для деплоя (сверх пакета) |
+| `sensor_name` | string | `imx219` | Имя сенсора в имени файла `<sensor>_<w>x<h>.yaml` |
+| `batch_input_dir` | string | `` | Папка кадров для офлайн-режима (если задана) |
+| `batch_shutdown` | bool | true | Выйти после офлайн-калибровки |
+
+---
+
+## Сервисы
+
+Конфигурацию доски можно задать параметрами launch (см. выше), а можно менять на лету сервисом `set_config`.
+
+| Сервис | Тип | Параметры запроса<br>---<br>ответ | Что делает |
+|--------|-----|-----------------------------------|------------|
+| `/calibration/start_session` | `std_srvs/srv/Trigger` | ---<br>`bool success`, `string message` | Начинает новую сессию (каталог в `output_dir`). |
+| `/calibration/reset_session` | `std_srvs/srv/Trigger` | ---<br>`bool success`, `string message` | Сбрасывает сессию и захваченные данные. |
+| `/calibration/capture` | `std_srvs/srv/Trigger` | ---<br>`bool success`, `string message` | Захватывает один кадр; `success=false`, если доска не найдена. |
+| `/calibration/calibrate` | `std_srvs/srv/Trigger` | ---<br>`bool success`, `string message` | Калибрует по кадрам с авто-отсевом выбросов; при `auto_deploy` — деплоит. |
+| `/calibration/save` | `std_srvs/srv/Trigger` | ---<br>`bool success`, `string message` | Сохраняет YAML в `output_dir` + `latest_calibration.yaml`. |
+| `/calibration/deploy` | `std_srvs/srv/Trigger` | ---<br>`bool success`, `string message` | Сохраняет и копирует YAML в config-папки драйвера. |
+| `/calibration/get_state` | `camera_calibration/srv/GetState` | ---<br>`bool success`, `string state_json` | Полное состояние ноды в JSON. |
+| `/calibration/list_captures` | `camera_calibration/srv/ListCaptures` | ---<br>`bool success`, `string[] captures` | Список захваченных кадров (JSON-строки). |
+| `/calibration/remove_capture` | `camera_calibration/srv/RemoveCapture` | `int32 index`<br>---<br>`bool success`, `string message` | Удаляет кадр по индексу. |
+| `/calibration/set_auto_capture` | `camera_calibration/srv/SetAutoCapture` | `bool enable`, `float32 period_sec`<br>---<br>`bool success`, `string message` | Авто-захват раз в интервал (стоп по `min_frames`). |
+| `/calibration/set_config` | `camera_calibration/srv/SetCalibrationConfig` | `string board_type`, `string camera_model`, `int32 board_width`, `int32 board_height`, `float32 square_size`, `float32 marker_size`, `string aruco_dict`, `int32 min_frames`, `bool save_captures`<br>---<br>`bool success`, `string message` | Меняет конфигурацию (сбрасывает захваченные кадры). |
+
+**Примеры:**
+
+```bash
+# конфигурация charuco + fisheye
+ros2 service call /calibration/set_config camera_calibration/srv/SetCalibrationConfig \
+"{board_type: 'charuco', camera_model: 'fisheye', board_width: 11, board_height: 8, square_size: 0.022, marker_size: 0.016, aruco_dict: 'DICT_4X4_50', min_frames: 20, save_captures: true}"
+
+# сессия -> захват -> калибровка
+ros2 service call /calibration/start_session std_srvs/srv/Trigger
+ros2 service call /calibration/capture std_srvs/srv/Trigger
+ros2 service call /calibration/calibrate std_srvs/srv/Trigger
+
+# авто-захват раз в 1.5 с (двигай доску)
+ros2 service call /calibration/set_auto_capture camera_calibration/srv/SetAutoCapture "{enable: true, period_sec: 1.5}"
+
+# деплой в config драйвера
+ros2 service call /calibration/deploy std_srvs/srv/Trigger
 ```
-Заметьте, что поле "square_size" здесь отображает расстояние между кругами. 
-### Калибровочная доска с ассиметричными кругами (расположенными по диагонали)
+
+---
+
+## Топики
+
+| Топик | Тип | Описание |
+|-------|-----|----------|
+| `/camera_calibration/status` | `std_msgs/String` | Человекочитаемый статус (результаты вызовов). |
+| `/camera_calibration/state` | `std_msgs/String` | Полное состояние ноды в JSON (то же, что `get_state`). |
+| `/camera_calibration/processed_image` | `sensor_msgs/Image` | Превью с разметкой детекции доски (зелёная — найдена). |
+
+Для просмотра превью используйте `rqt_image_view /camera_calibration/processed_image`, `web_video_server` или веб-интерфейс Sverk.
+
+---
+
+## Конфигурации калибровочных досок
+
+Значения `board_width`/`board_height` трактуются по типу доски: для `chessboard` — число **внутренних углов**, для `charuco`/`circles`/`acircles` — число **клеток/кругов**. Готовые доски для печати — в `boards_examples_a4/`, свои можно сгенерировать на <https://calib.io/pages/camera-calibration-pattern-generator>.
+
+### Шахматная доска (chessboard)
+```json
+{"board_type": "chessboard", "camera_model": "pinhole", "board_width": 10, "board_height": 7, "square_size": 0.022, "marker_size": 0, "aruco_dict": "", "min_frames": 5, "save_captures": true}
 ```
-{
-  "board_type": "acircles",
-  "camera_model": "pinhole",
-  "board_width": 4,
-  "board_height": 11,
-  "square_size": 0.021213,
-  "marker_size": 0,
-  "aruco_dict": "",
-  "min_frames": 5,
-  "save_captures": true
-}
+Поля ArUco (`marker_size`, `aruco_dict`) игнорируются.
+
+### Шахматная доска с ArUco (charuco)
+```json
+{"board_type": "charuco", "camera_model": "fisheye", "board_width": 11, "board_height": 8, "square_size": 0.022, "marker_size": 0.016, "aruco_dict": "DICT_4X4_50", "min_frames": 20, "save_captures": true}
 ```
-Здесь поле "square_size" отображает расстояние между центрами кругов, а диаметр не имеет значения (от диаметра зависит только то, насколько отчетливо будут видны круги, а соответственно - вероятность того, что кадр будет записан, поэтому при генерации калибровочной доски выбирайте адекватное значение).
+`marker_size` должен быть меньше `square_size`.
+
+### Доска с кругами (circles)
+```json
+{"board_type": "circles", "camera_model": "pinhole", "board_width": 11, "board_height": 8, "square_size": 0.022, "marker_size": 0, "aruco_dict": "", "min_frames": 5, "save_captures": true}
+```
+`square_size` здесь — расстояние между центрами кругов.
+
+### Асимметричные круги (acircles)
+```json
+{"board_type": "acircles", "camera_model": "pinhole", "board_width": 4, "board_height": 11, "square_size": 0.021213, "marker_size": 0, "aruco_dict": "", "min_frames": 5, "save_captures": true}
+```
+`square_size` — расстояние между центрами; диаметр влияет только на надёжность детекции.
+
+---
+
+## Авто-отсев выбросов
+
+При калибровке нода итеративно удаляет кадры, у которых средняя ошибка репроекции превышает `max_frame_reproj` (по умолчанию **2.0 px**), и пересчитывает результат — так один битый кадр не портит всю калибровку. Дополнительно для `fisheye` отбрасываются плохо обусловленные (ill-conditioned) кадры. Исходные захваты не удаляются — отсев работает на подмножестве.
+
+В сообщении калибровки видно, что отсеяно:
+```
+Calibrated (fisheye). reproj_error=0.209442, rms=0.243262, frames=35/36, dropped 1 outlier frame(s) (>2px)
+```
+
+- `max_frame_reproj:=1.5` — строже; `max_frame_reproj:=0` — отключить отсев.
+- Есть защита: не опускается ниже `max(3, min_frames/2)` кадров.
+
+В YAML пишутся `num_calibration_frames` (использовано), `num_captured_frames`, `dropped_outliers`, `dropped_illcond`.
+
+---
+
+## Авто-деплой в драйвер камеры
+
+Готовый YAML сохраняется как `<sensor_name>_<width>x<height>.yaml` (например `imx219_1280x960.yaml`) и копируется во **все** найденные config-папки пакета `deploy_driver_package`:
+
+- `install/share/<pkg>/config` — действует сразу, без пересборки;
+- `src/**/<pkg>/config` — переживает `colcon build`.
+
+Длинный путь указывать не нужно — достаточно имени пакета драйвера (`a733_csi_cam_ros2` для Orange Pi Zero 3W, `mipi_csi_cam_ros2` для RPi/RK3588S). Проверить реальные цели можно в `/camera_calibration/state` (поле `deploy_targets`).
+
+Авто-деплой срабатывает при `auto_deploy:=true`, если `reproj <= auto_deploy_max_reproj`. Ручной деплой — сервисом `/calibration/deploy`.
+
+> После записи в `install/share` учтите: следующий `colcon build --packages-select <driver>` перезальёт install из src — где файл тоже уже лежит, поэтому калибровка сохранится.
+
+---
+
+## Офлайн-калибровка по папке
+
+Если кадры уже сняты (сессия писала их при `save_captures=true` в `output_dir/sessions/<id>/captures/`), можно откалибровать без камеры одной командой — см. [Запуск](#запуск), `calibrate_from_dir.launch.py`. Полезные аргументы:
+
+- `batch_shutdown:=false` — не выходить после калибровки (остаться с сервисами);
+- `max_frame_reproj:=1.5` — строже отсев;
+- `min_charuco_corners:=18` — жёстче входной фильтр детекции;
+- `deploy_driver_package:=<pkg>` — куда деплоить.
+
+Для тонкого разбора (сравнение pinhole/fisheye, per-frame ошибки) есть скрипт `test/recalibrate_offline.py`.
+
+---
+
+## Верификация калибровки
+
+`verify_calibration_node.py` читает YAML и выводит статистику и вердикт с рекомендацией (оставить как есть / улучшить / переснять):
+
+```bash
+# по файлу
+ros2 run camera_calibration verify_calibration_node.py --file <path.yaml>
+# по последней калибровке (~/camera_calibrations/latest_calibration.yaml)
+ros2 run camera_calibration verify_calibration_node.py
+# с глубоким per-frame анализом по сохранённым кадрам
+ros2 run camera_calibration verify_calibration_node.py --file <yaml> --captures <папка raw_*.jpg>
+```
+
+Анализирует: интринсики (fx/fy, соотношение), смещение главной точки, оценку FOV (H/V/D) и её соответствие модели, коэффициенты дисторсии, `reprojection_error` с буквенной оценкой и числом кадров. Код возврата: `0` — калибровка приемлема, `1` — рекомендуется переделать.
+
+---
+
+## Типичный сценарий
+
+1. Запустить драйвер камеры (топик изображения публикуется).
+2. Запустить ноду с конфигурацией доски и авто-деплоем (см. [Запуск](#запуск)).
+3. `start_session`, затем набрать кадры (`capture` или `set_auto_capture`), двигая доску по всему кадру — для широкого угла обязательно по краям и углам под наклоном.
+4. `calibrate` — выбросы отсеются сами; при `reproj <= auto_deploy_max_reproj` результат задеплоится.
+5. Проверить результат: `verify_calibration_node.py`.
+6. Пересобрать драйвер, если деплой шёл в `install`: `colcon build --packages-select <driver> && source install/setup.bash`.
+
+---
+
+## Инструменты и тесты
+
+В каталоге `test/`:
+
+- **verify_calibration.sh** — интеграционная проверка ноды (сервисы, захват, калибровка, деплой).
+- **test_offline_units.py** — юнит-тесты чистых функций (без камеры/ROS).
+- **recalibrate_offline.py** — сравнение pinhole/fisheye и отсев выбросов по сохранённым кадрам.
+- **VERIFY_AGENT_PROMPT.md** — инструкция для агента-проверяющего.
+
+Инструмент верификации: **src/verify_calibration_node.py** (`ros2 run camera_calibration verify_calibration_node.py`).
+
+---
 
 ## Дополнительные сведения
-1. В директории "./boards_examples_a4" лежат калибровочные доски для примеров из пункта 3, а вот здесь можно сделать свои - https://calib.io/pages/camera-calibration-pattern-generator.
-2. Если вызов сервиса возвращает "timeout", возможно, нода все еще поднимается или произошел магический баг, попробуйте вызвать еще раз.
+
+- В `boards_examples_a4/` лежат доски для примеров выше.
+- Если вызов сервиса возвращает `timeout` — нода ещё поднимается, попробуйте повторить.
+
+---
+
+*Документация актуальна для пакета `camera_calibration` в составе sverk_ws.*

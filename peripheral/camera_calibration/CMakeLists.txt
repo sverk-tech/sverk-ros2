@@ -22,6 +22,7 @@ ament_export_dependencies(rosidl_default_runtime)
 
 install(PROGRAMS
   src/camera_calibration_node.py
+  src/verify_calibration_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

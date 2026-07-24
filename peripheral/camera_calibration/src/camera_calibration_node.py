@@ -61,6 +61,41 @@ class CameraCalibrationNode(Node):
         self.declare_parameter("preview_rate_hz", 5.0)
         self.declare_parameter("publish_preview_when_idle", True)
         self.declare_parameter("min_charuco_corners", 10)
+        # Авто-деплой: при reproj_error <= auto_deploy_max_reproj калибровка
+        # автоматически сохраняется и копируется в config-папку драйвера камеры
+        # под именем <sensor_name>_<w>x<h>.yaml (соглашение драйверов *_csi_cam_ros2).
+        # Удобный путь — задать ИМЯ пакета драйвера (deploy_driver_package): нода
+        # сама найдёт и install/share/<pkg>/config (действует сразу), и
+        # src/**/<pkg>/config (переживает colcon build) и запишет YAML в оба.
+        # deploy_config_dir — необязательный доп. путь для нестандартных случаев.
+        # Авто-отсев выбросов: после калибровки кадры, у которых средняя ошибка
+        # репроекции выше max_frame_reproj (px), итеративно выкидываются и
+        # калибровка пересчитывается. 0 — отключить отсев.
+        self.declare_parameter("max_frame_reproj", 2.0)
+        self.declare_parameter("auto_deploy", False)
+        self.declare_parameter("auto_deploy_max_reproj", 1.0)
+        self.declare_parameter("deploy_driver_package", "a733_csi_cam_ros2")
+        self.declare_parameter("workspace_src", "/home/sverk/sverk_ws/src")
+        self.declare_parameter("deploy_config_dir", "")
+        self.declare_parameter("sensor_name", "imx219")
+
+        # Стартовая конфигурация доски из launch — чтобы не задавать её отдельным
+        # вызовом set_config. Особенно нужно для batch-режима (папка с готовыми
+        # кадрами). Значения по умолчанию совпадают с CalibrationConfig.
+        _dc = CalibrationConfig()
+        self.declare_parameter("board_type", _dc.board_type)
+        self.declare_parameter("camera_model", _dc.camera_model)
+        self.declare_parameter("board_width", _dc.board_width)
+        self.declare_parameter("board_height", _dc.board_height)
+        self.declare_parameter("square_size", _dc.square_size)
+        self.declare_parameter("marker_size", _dc.marker_size)
+        self.declare_parameter("aruco_dict", _dc.aruco_dict)
+        self.declare_parameter("min_frames", _dc.min_frames)
+        # Batch-режим: если задан batch_input_dir — на старте нода прочитает
+        # картинки из папки, откалибруется и (при наличии целей) задеплоит,
+        # без сервисных вызовов. batch_shutdown — выйти после завершения.
+        self.declare_parameter("batch_input_dir", "")
+        self.declare_parameter("batch_shutdown", True)
 
         self.image_topic = str(self.get_parameter("image_topic").value)
         self.output_dir = str(self.get_parameter("output_dir").value)
@@ -69,6 +104,16 @@ class CameraCalibrationNode(Node):
         self.preview_rate_hz = float(self.get_parameter("preview_rate_hz").value)
         self.publish_preview_when_idle = bool(self.get_parameter("publish_preview_when_idle").value)
         self.min_charuco_corners = int(self.get_parameter("min_charuco_corners").value)
+        self.max_frame_reproj = float(self.get_parameter("max_frame_reproj").value)
+        self.auto_deploy = bool(self.get_parameter("auto_deploy").value)
+        self.auto_deploy_max_reproj = float(self.get_parameter("auto_deploy_max_reproj").value)
+        self.deploy_driver_package = str(self.get_parameter("deploy_driver_package").value)
+        self.workspace_src = str(self.get_parameter("workspace_src").value)
+        self.deploy_config_dir = str(self.get_parameter("deploy_config_dir").value)
+        self.sensor_name = str(self.get_parameter("sensor_name").value)
+
+        self.batch_input_dir = str(self.get_parameter("batch_input_dir").value)
+        self.batch_shutdown = bool(self.get_parameter("batch_shutdown").value)
 
         self._lock = threading.Lock()
         self._bridge = CvBridge()
@@ -76,7 +121,17 @@ class CameraCalibrationNode(Node):
         self._last_frame_bgr: Optional[np.ndarray] = None
         self._image_size: Optional[Tuple[int, int]] = None  # (w, h)
 
-        self._cfg = CalibrationConfig()
+        self._cfg = CalibrationConfig(
+            board_type=str(self.get_parameter("board_type").value),
+            camera_model=str(self.get_parameter("camera_model").value),
+            board_width=int(self.get_parameter("board_width").value),
+            board_height=int(self.get_parameter("board_height").value),
+            square_size=float(self.get_parameter("square_size").value),
+            marker_size=float(self.get_parameter("marker_size").value),
+            aruco_dict=str(self.get_parameter("aruco_dict").value),
+            min_frames=int(self.get_parameter("min_frames").value),
+            save_captures=_dc.save_captures,
+        )
         self._session_active = False
         self._session_id: Optional[str] = None
         self._session_dir: Optional[str] = None
@@ -92,6 +147,7 @@ class CameraCalibrationNode(Node):
         self._calibrated = False
         self._calib_result: Dict[str, object] = {}
         self._last_saved_yaml: Optional[str] = None
+        self._last_deployed_yaml: Optional[str] = None
 
         self._base_objp: Optional[np.ndarray] = None
         self._blob_detector = None
@@ -100,9 +156,9 @@ class CameraCalibrationNode(Node):
         self._aruco_detector = None
         self._aruco_params = None
 
-        self._status_pub = self.create_publisher(String, "/calibration/status", 10)
-        self._state_pub = self.create_publisher(String, "/calibration/state", 10)
-        self._processed_image_pub = self.create_publisher(Image, "/calibration/processed_image", 10)
+        self._status_pub = self.create_publisher(String, "/camera_calibration/status", 10)
+        self._state_pub = self.create_publisher(String, "/camera_calibration/state", 10)
+        self._processed_image_pub = self.create_publisher(Image, "/camera_calibration/processed_image", 10)
 
         ok, msg = self._apply_config(self._cfg, reset_session_data=True)
         if not ok:
@@ -120,6 +176,7 @@ class CameraCalibrationNode(Node):
         self.create_service(Trigger, "/calibration/capture", self._srv_capture)
         self.create_service(Trigger, "/calibration/calibrate", self._srv_calibrate)
         self.create_service(Trigger, "/calibration/save", self._srv_save)
+        self.create_service(Trigger, "/calibration/deploy", self._srv_deploy)
 
         self.create_service(SetCalibrationConfig, "/calibration/set_config", self._srv_set_config)
         self.create_service(SetAutoCapture, "/calibration/set_auto_capture", self._srv_set_auto_capture)
@@ -135,6 +192,84 @@ class CameraCalibrationNode(Node):
         self._state_timer = self.create_timer(1.0, self._publish_state)
 
         self._publish_status("Ready")
+
+        # Batch-режим: одноразовый таймер, чтобы нода успела подняться в executor.
+        self._batch_timer = None
+        if self.batch_input_dir.strip():
+            self._batch_timer = self.create_timer(0.5, self._batch_once)
+
+    def _batch_once(self) -> None:
+        # Срабатывает один раз: калибровка по папке с готовыми кадрами.
+        if self._batch_timer is not None:
+            try:
+                self._batch_timer.cancel()
+            except Exception:
+                pass
+            self._batch_timer = None
+        try:
+            self._run_batch(self.batch_input_dir)
+        except Exception as e:
+            self.get_logger().error(f"Batch failed: {e}")
+        if self.batch_shutdown:
+            self.get_logger().info("Batch done, shutting down.")
+            rclpy.shutdown()
+
+    def _run_batch(self, input_dir: str) -> None:
+        import glob
+        base = os.path.expanduser(input_dir)
+        if not os.path.isdir(base):
+            self._publish_status(f"Batch: dir not found: {base}")
+            self.get_logger().error(f"Batch: dir not found: {base}")
+            return
+
+        files: List[str] = []
+        for ext in ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.PNG"):
+            files.extend(glob.glob(os.path.join(base, ext)))
+        # Игнорируем overlay_*.jpg (это разметка, а не сырые кадры).
+        files = sorted(f for f in set(files) if not os.path.basename(f).startswith("overlay_"))
+        if not files:
+            self._publish_status(f"Batch: no images in {base}")
+            self.get_logger().error(f"Batch: no images in {base}")
+            return
+
+        self.get_logger().info(
+            f"Batch: {len(files)} images, board={self._cfg.board_type} "
+            f"{self._cfg.board_width}x{self._cfg.board_height}, model={self._cfg.camera_model}"
+        )
+
+        used = 0
+        for f in files:
+            img = cv2.imread(f)
+            if img is None:
+                self.get_logger().warn(f"  skip {os.path.basename(f)}: unreadable")
+                continue
+            self._image_size = (img.shape[1], img.shape[0])
+            _, found, info, objp, imgp = self._detect_and_draw(img, for_preview=False)
+            if found and objp is not None and imgp is not None:
+                self._objpoints.append(objp)
+                self._imgpoints.append(imgp)
+                used += 1
+            else:
+                self.get_logger().warn(f"  skip {os.path.basename(f)}: {info}")
+
+        self._publish_status(f"Batch: detected {used}/{len(files)} frames")
+        self.get_logger().info(f"Batch: detected {used}/{len(files)} frames")
+        if used < 3:
+            self._publish_status("Batch: not enough detected frames (<3)")
+            self.get_logger().error("Batch: not enough detected frames (<3)")
+            return
+
+        ok, msg = self._run_calibration()
+        self.get_logger().info(msg)
+        if not ok:
+            return
+
+        # Всегда сохраняем YAML; деплоим, если заданы цели.
+        sok, spath = self._save_yaml()
+        self.get_logger().info(f"Saved: {spath}" if sok else f"Save failed: {spath}")
+        if self._resolve_deploy_dirs():
+            dok, dmsg = self._deploy_current_calibration()
+            self.get_logger().info(dmsg)
 
     def _image_cb(self, msg: Image) -> None:
         try:
@@ -155,7 +290,7 @@ class CameraCalibrationNode(Node):
         if frame is None:
             return
 
-        overlay, _, _ = self._detect_and_draw(frame, for_preview=True)
+        overlay, _, _, _, _ = self._detect_and_draw(frame, for_preview=True)
         self._publish_overlay(overlay)
 
     def _srv_start_session(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
@@ -184,6 +319,12 @@ class CameraCalibrationNode(Node):
 
     def _srv_save(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
         ok, msg = self._save_yaml()
+        res.success = ok
+        res.message = msg
+        return res
+
+    def _srv_deploy(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        ok, msg = self._deploy_current_calibration()
         res.success = ok
         res.message = msg
         return res
@@ -388,11 +529,11 @@ class CameraCalibrationNode(Node):
         if frame is None:
             return False, "No image received yet"
 
-        overlay, found, info = self._detect_and_draw(frame, for_preview=False)
+        overlay, found, info, objp, imgp = self._detect_and_draw(frame, for_preview=False)
         if publish_result:
             self._publish_overlay(overlay)
 
-        if not found:
+        if not found or objp is None or imgp is None:
             msg = f"Target not detected ({info})"
             self._publish_status(msg)
             return False, msg
@@ -400,7 +541,7 @@ class CameraCalibrationNode(Node):
         if self._image_size is None:
             self._image_size = (frame.shape[1], frame.shape[0])
 
-        ok, save_msg = self._store_capture(frame, overlay)
+        ok, save_msg = self._store_capture(frame, overlay, objp, imgp)
         if not ok:
             self._publish_status(save_msg)
             return False, save_msg
@@ -415,11 +556,13 @@ class CameraCalibrationNode(Node):
 
         return True, msg
 
-    def _store_capture(self, raw_bgr: np.ndarray, overlay_bgr: np.ndarray) -> Tuple[bool, str]:
-        objp, imgp = self._extract_points(raw_bgr)
-        if objp is None or imgp is None:
-            return False, "Target points could not be extracted"
-
+    def _store_capture(
+        self,
+        raw_bgr: np.ndarray,
+        overlay_bgr: np.ndarray,
+        objp: np.ndarray,
+        imgp: np.ndarray,
+    ) -> Tuple[bool, str]:
         self._objpoints.append(objp)
         self._imgpoints.append(imgp)
 
@@ -478,12 +621,18 @@ class CameraCalibrationNode(Node):
         self._publish_state()
         return True, "OK"
 
-    def _detect_and_draw(self, frame_bgr: np.ndarray, for_preview: bool) -> Tuple[np.ndarray, bool, str]:
+    def _detect_and_draw(
+        self, frame_bgr: np.ndarray, for_preview: bool
+    ) -> Tuple[np.ndarray, bool, str, Optional[np.ndarray], Optional[np.ndarray]]:
+        # Детекция выполняется один раз: тот же результат используется и для
+        # отрисовки overlay, и для извлечения objp/imgp при захвате кадра.
         overlay = frame_bgr.copy()
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
 
         found = False
         info = self._cfg.board_type
+        objp: Optional[np.ndarray] = None
+        imgp: Optional[np.ndarray] = None
 
         if self._cfg.board_type == "chessboard":
             found, corners = cv2.findChessboardCorners(
@@ -500,6 +649,11 @@ class CameraCalibrationNode(Node):
                     (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
                 )
                 cv2.drawChessboardCorners(overlay, (self._cfg.board_width, self._cfg.board_height), corners_refined, found)
+                if self._base_objp is not None:
+                    objp = self._base_objp.copy()
+                    imgp = corners_refined.reshape(-1, 2).astype(np.float32)
+                else:
+                    found = False
 
         elif self._cfg.board_type in {"circles", "acircles"}:
             flags = cv2.CALIB_CB_SYMMETRIC_GRID if self._cfg.board_type == "circles" else cv2.CALIB_CB_ASYMMETRIC_GRID
@@ -511,6 +665,11 @@ class CameraCalibrationNode(Node):
             )
             if found and centers is not None:
                 cv2.drawChessboardCorners(overlay, (self._cfg.board_width, self._cfg.board_height), centers, found)
+                if self._base_objp is not None:
+                    objp = self._base_objp.copy()
+                    imgp = centers.reshape(-1, 2).astype(np.float32)
+                else:
+                    found = False
 
         elif self._cfg.board_type == "charuco":
             if self._aruco_dictionary is None or self._charuco_board is None:
@@ -530,6 +689,8 @@ class CameraCalibrationNode(Node):
                         found = True
                         info = f"charuco corners={len(charuco_ids)}"
                         cv2.aruco.drawDetectedCornersCharuco(overlay, charuco_corners, charuco_ids)
+                        objp = self._charuco_board.chessboardCorners[charuco_ids.flatten()].astype(np.float32)
+                        imgp = charuco_corners.reshape(-1, 2).astype(np.float32)
                     else:
                         found = False
                         info = "charuco corners insufficient"
@@ -538,7 +699,7 @@ class CameraCalibrationNode(Node):
                     info = "aruco markers not detected"
 
         self._annotate_overlay(overlay, found, info)
-        return overlay, found, info
+        return overlay, found, info, objp, imgp
 
     def _annotate_overlay(self, img: np.ndarray, found: bool, info: str) -> None:
         color = (0, 255, 0) if found else (0, 0, 255)
@@ -556,67 +717,6 @@ class CameraCalibrationNode(Node):
             cv2.putText(img, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA)
             y += 22
 
-    def _extract_points(self, frame_bgr: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-
-        if self._cfg.board_type == "chessboard":
-            found, corners = cv2.findChessboardCorners(
-                gray,
-                (self._cfg.board_width, self._cfg.board_height),
-                cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE + cv2.CALIB_CB_FAST_CHECK,
-            )
-            if not found or corners is None:
-                return None, None
-            corners_refined = cv2.cornerSubPix(
-                gray,
-                corners,
-                (11, 11),
-                (-1, -1),
-                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
-            )
-            if self._base_objp is None:
-                return None, None
-            objp = self._base_objp.copy()
-            imgp = corners_refined.reshape(-1, 2).astype(np.float32)
-            return objp, imgp
-
-        if self._cfg.board_type in {"circles", "acircles"}:
-            flags = cv2.CALIB_CB_SYMMETRIC_GRID if self._cfg.board_type == "circles" else cv2.CALIB_CB_ASYMMETRIC_GRID
-            found, centers = cv2.findCirclesGrid(
-                gray,
-                (self._cfg.board_width, self._cfg.board_height),
-                flags=flags,
-                blobDetector=self._blob_detector,
-            )
-            if not found or centers is None:
-                return None, None
-            if self._base_objp is None:
-                return None, None
-            objp = self._base_objp.copy()
-            imgp = centers.reshape(-1, 2).astype(np.float32)
-            return objp, imgp
-
-        if self._cfg.board_type == "charuco":
-            if self._aruco_dictionary is None or self._charuco_board is None:
-                return None, None
-            corners, ids, _ = self._detect_aruco_markers(gray)
-            if ids is None or len(ids) == 0:
-                return None, None
-            _, charuco_corners, charuco_ids = cv2.aruco.interpolateCornersCharuco(
-                corners,
-                ids,
-                gray,
-                self._charuco_board,
-            )
-            if charuco_ids is None or charuco_corners is None or len(charuco_ids) < self.min_charuco_corners:
-                return None, None
-
-            objp = self._charuco_board.chessboardCorners[charuco_ids.flatten()].astype(np.float32)
-            imgp = charuco_corners.reshape(-1, 2).astype(np.float32)
-            return objp, imgp
-
-        return None, None
-
     def _run_calibration(self) -> Tuple[bool, str]:
         if len(self._objpoints) < 3:
             return False, f"Not enough frames: {len(self._objpoints)}"
@@ -625,105 +725,152 @@ class CameraCalibrationNode(Node):
 
         image_size = self._image_size
 
-        if self._cfg.camera_model == "pinhole":
-            return self._calibrate_pinhole(image_size)
-        if self._cfg.camera_model == "fisheye":
-            return self._calibrate_fisheye(image_size)
+        if self._cfg.camera_model in ("pinhole", "fisheye"):
+            return self._calibrate_model(self._cfg.camera_model, image_size)
 
         return False, f"Unsupported camera_model: {self._cfg.camera_model}"
 
-    def _calibrate_pinhole(self, image_size: Tuple[int, int]) -> Tuple[bool, str]:
+    def _calibrate_model(self, model: str, image_size: Tuple[int, int]) -> Tuple[bool, str]:
+        # Единый путь для pinhole и fisheye с итеративным авто-отсевом:
+        #   1) калибруем по текущему набору кадров;
+        #   2) fisheye дополнительно выкидывает ill-conditioned кадры (CHECK_COND);
+        #   3) если max_frame_reproj > 0 и худший кадр по ошибке превышает порог —
+        #      выкидываем ЕГО и калибруем заново; повторяем, пока все кадры <= порога
+        #      (или пока не останется минимум кадров). Один битый кадр больше не
+        #      портит всю калибровку.
+        # Исходные захваты (_objpoints/_imgpoints) не меняются — отсев работает
+        # на подмножестве индексов.
         try:
-            rms, K, D, rvecs, tvecs = cv2.calibrateCamera(
-                self._objpoints,
-                self._imgpoints,
-                image_size,
-                None,
-                None,
-            )
-            reproj = self._compute_reprojection_error_pinhole(K, D, rvecs, tvecs)
+            n = len(self._objpoints)
+            keep = list(range(n))
+            illcond: List[int] = []
+            outliers: List[int] = []
+            floor = max(3, min(self._cfg.min_frames // 2, n))
+
+            while True:
+                objp_list = [self._objpoints[k] for k in keep]
+                imgp_list = [self._imgpoints[k] for k in keep]
+                if len(keep) < 3:
+                    return False, (
+                        f"Calibration failed: too few usable frames "
+                        f"(dropped {len(illcond)} ill-conditioned, {len(outliers)} outliers)"
+                    )
+
+                rms, K, D, errs, dropped_pos = self._fit_once(model, objp_list, imgp_list, image_size)
+
+                # ill-conditioned кадры (только fisheye): убираем и пересчитываем
+                if dropped_pos:
+                    dropped_global = {keep[p] for p in dropped_pos}
+                    illcond.extend(sorted(dropped_global))
+                    keep = [g for g in keep if g not in dropped_global]
+                    continue
+
+                # авто-отсев выброса: худший кадр выше порога
+                if self.max_frame_reproj > 0.0 and len(keep) > floor:
+                    worst_pos = int(np.argmax(errs))
+                    if errs[worst_pos] > self.max_frame_reproj:
+                        outliers.append(keep.pop(worst_pos))
+                        continue
+
+                break
+
+            reproj = float(np.mean(errs)) if errs else float("inf")
+            distortion_model = "plumb_bob" if model == "pinhole" else "equidistant"
             self._calibrated = True
             self._calib_result = {
-                "camera_model": "pinhole",
-                "distortion_model": "plumb_bob",
+                "camera_model": model,
+                "distortion_model": distortion_model,
                 "rms": float(rms),
-                "reprojection_error": float(reproj),
+                "reprojection_error": reproj,
                 "K": K,
                 "D": D.reshape(-1, 1),
+                "frames_used": len(keep),
+                "dropped_outliers": len(outliers),
+                "dropped_illcond": len(illcond),
             }
-            msg = f"Calibrated (pinhole). reproj_error={reproj:.6f}, rms={rms:.6f}"
+            msg = f"Calibrated ({model}). reproj_error={reproj:.6f}, rms={rms:.6f}, frames={len(keep)}/{n}"
+            if outliers:
+                msg += f", dropped {len(outliers)} outlier frame(s) (>{self.max_frame_reproj:g}px)"
+            if illcond:
+                msg += f", dropped {len(illcond)} ill-conditioned frame(s)"
             self._publish_status(msg)
             self._publish_state()
+            msg += self._maybe_auto_deploy(reproj)
             return True, msg
         except Exception as e:
             return False, f"Calibration failed: {e}"
 
-    def _calibrate_fisheye(self, image_size: Tuple[int, int]) -> Tuple[bool, str]:
-        try:
-            objp = [o.reshape(-1, 1, 3).astype(np.float64) for o in self._objpoints]
-            imgp = [i.reshape(-1, 1, 2).astype(np.float64) for i in self._imgpoints]
+    def _fit_once(self, model: str, objp_list, imgp_list, image_size):
+        # Одна калибровка по переданному подмножеству кадров.
+        # Возвращает (rms, K, D, per_frame_errs, dropped_positions), где
+        # dropped_positions — позиции во входных списках, убранные из-за
+        # ill-conditioned (только fisheye; для pinhole всегда []).
+        # per_frame_errs выровнен по СОХРАНЁННЫМ кадрам (в порядке keep).
+        if model == "pinhole":
+            op = [o.reshape(-1, 1, 3).astype(np.float32) for o in objp_list]
+            ip = [i.reshape(-1, 1, 2).astype(np.float32) for i in imgp_list]
+            rms, K, D, rvecs, tvecs = cv2.calibrateCamera(op, ip, image_size, None, None)
+            errs = [self._perframe_err_pinhole(op[j], ip[j], K, D, rvecs[j], tvecs[j])
+                    for j in range(len(op))]
+            return rms, K, D, errs, []
 
+        # fisheye
+        op = [o.reshape(-1, 1, 3).astype(np.float64) for o in objp_list]
+        ip = [i.reshape(-1, 1, 2).astype(np.float64) for i in imgp_list]
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
+        base_flags = cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC | cv2.fisheye.CALIB_FIX_SKEW
+
+        keep = list(range(len(op)))
+        dropped: List[int] = []
+        while True:
+            o = [op[k] for k in keep]
+            i = [ip[k] for k in keep]
+            if len(o) < 3:
+                raise RuntimeError("too few usable frames (ill-conditioned)")
             K = np.zeros((3, 3), dtype=np.float64)
             D = np.zeros((4, 1), dtype=np.float64)
+            try:
+                rms, K, D, rvecs, tvecs = cv2.fisheye.calibrate(
+                    o, i, image_size, K, D, None, None,
+                    flags=base_flags | cv2.fisheye.CALIB_CHECK_COND, criteria=criteria)
+                break
+            except cv2.error as e:
+                bad = self._parse_illcond_index(str(e))
+                if bad is not None and 0 <= bad < len(keep):
+                    dropped.append(keep.pop(bad))
+                    continue
+                rms, K, D, rvecs, tvecs = cv2.fisheye.calibrate(
+                    o, i, image_size, K, D, None, None,
+                    flags=base_flags, criteria=criteria)
+                break
 
-            flags = (
-                cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC
-                | cv2.fisheye.CALIB_CHECK_COND
-                | cv2.fisheye.CALIB_FIX_SKEW
-            )
-            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
+        errs = [self._perframe_err_fisheye(op[keep[j]], ip[keep[j]], K, D, rvecs[j], tvecs[j])
+                for j in range(len(keep))]
+        return rms, K, D, errs, sorted(dropped)
 
-            rms, K, D, rvecs, tvecs = cv2.fisheye.calibrate(
-                objp,
-                imgp,
-                image_size,
-                K,
-                D,
-                None,
-                None,
-                flags=flags,
-                criteria=criteria,
-            )
-            reproj = self._compute_reprojection_error_fisheye(K, D, rvecs, tvecs)
-            self._calibrated = True
-            self._calib_result = {
-                "camera_model": "fisheye",
-                "distortion_model": "equidistant",
-                "rms": float(rms),
-                "reprojection_error": float(reproj),
-                "K": K,
-                "D": D.reshape(-1, 1),
-            }
-            msg = f"Calibrated (fisheye). reproj_error={reproj:.6f}, rms={rms:.6f}"
-            self._publish_status(msg)
-            self._publish_state()
-            return True, msg
-        except Exception as e:
-            return False, f"Calibration failed: {e}"
+    @staticmethod
+    def _perframe_err_pinhole(objp, imgp, K, D, rv, tv) -> float:
+        proj, _ = cv2.projectPoints(objp, rv, tv, K, D)
+        return float(np.linalg.norm(imgp.reshape(-1, 2) - proj.reshape(-1, 2), axis=1).mean())
 
-    def _compute_reprojection_error_pinhole(self, K, D, rvecs, tvecs) -> float:
-        total_err = 0.0
-        total_points = 0
-        for objp, imgp, rv, tv in zip(self._objpoints, self._imgpoints, rvecs, tvecs):
-            proj, _ = cv2.projectPoints(objp, rv, tv, K, D)
-            proj2 = proj.reshape(-1, 2)
-            err = np.linalg.norm(imgp - proj2, axis=1).sum()
-            total_err += float(err)
-            total_points += imgp.shape[0]
-        return total_err / total_points if total_points > 0 else float("inf")
+    @staticmethod
+    def _perframe_err_fisheye(objp, imgp, K, D, rv, tv) -> float:
+        o = objp.reshape(-1, 1, 3).astype(np.float64)
+        i = imgp.reshape(-1, 1, 2).astype(np.float64)
+        proj, _ = cv2.fisheye.projectPoints(o, rv, tv, K, D)
+        return float(np.linalg.norm((i - proj).reshape(-1, 2), axis=1).mean())
 
-    def _compute_reprojection_error_fisheye(self, K, D, rvecs, tvecs) -> float:
-        total_err = 0.0
-        total_points = 0
-        for objp, imgp, rv, tv in zip(self._objpoints, self._imgpoints, rvecs, tvecs):
-            objp64 = objp.reshape(-1, 1, 3).astype(np.float64)
-            imgp64 = imgp.reshape(-1, 1, 2).astype(np.float64)
-            proj, _ = cv2.fisheye.projectPoints(objp64, rv, tv, K, D)
-            diff = imgp64 - proj
-            err = np.linalg.norm(diff.reshape(-1, 2), axis=1).sum()
-            total_err += float(err)
-            total_points += imgp.shape[0]
-        return total_err / total_points if total_points > 0 else float("inf")
+    @staticmethod
+    def _parse_illcond_index(err_text: str) -> Optional[int]:
+        # OpenCV: "CALIB_CHECK_COND - Ill-conditioned matrix for input array N"
+        import re
+        m = re.search(r"input array (\d+)", err_text)
+        if m:
+            try:
+                return int(m.group(1))
+            except ValueError:
+                return None
+        return None
 
     def _save_yaml(self) -> Tuple[bool, str]:
         if not self._calibrated:
@@ -760,7 +907,10 @@ class CameraCalibrationNode(Node):
             "square_size": float(self._cfg.square_size),
             "marker_size": float(self._cfg.marker_size) if self._cfg.board_type == "charuco" else 0.0,
             "aruco_dict": self._cfg.aruco_dict if self._cfg.board_type == "charuco" else "",
-            "num_calibration_frames": int(len(self._objpoints)),
+            "num_calibration_frames": int(self._calib_result.get("frames_used", len(self._objpoints))),
+            "num_captured_frames": int(len(self._objpoints)),
+            "dropped_outliers": int(self._calib_result.get("dropped_outliers", 0)),
+            "dropped_illcond": int(self._calib_result.get("dropped_illcond", 0)),
             "reprojection_error": float(self._calib_result.get("reprojection_error", 0.0)),
             "camera_matrix": {"rows": 3, "cols": 3, "data": K.reshape(-1).tolist()},
             "distortion_coefficients": {"rows": 1, "cols": int(D.shape[0]), "data": D.reshape(-1).tolist()},
@@ -796,6 +946,100 @@ class CameraCalibrationNode(Node):
         self._publish_state()
         return True, out_path
 
+    def _maybe_auto_deploy(self, reproj: float) -> str:
+        # Вызывается после успешной калибровки. Возвращает суффикс для статуса.
+        if not self.auto_deploy:
+            return ""
+        if reproj > self.auto_deploy_max_reproj:
+            note = f" | auto-deploy skipped: reproj {reproj:.4f} > {self.auto_deploy_max_reproj:.4f}"
+            self._publish_status(f"Auto-deploy skipped (reproj {reproj:.4f} > {self.auto_deploy_max_reproj:.4f})")
+            return note
+        ok, msg = self._deploy_current_calibration()
+        return f" | {msg}" if ok else f" | auto-deploy failed: {msg}"
+
+    def _resolve_deploy_dirs(self) -> List[str]:
+        # Собирает список config-папок, куда деплоить калибровку.
+        # По имени пакета драйвера находит и install/share/<pkg>/config
+        # (действует сразу, без пересборки), и src/**/<pkg>/config
+        # (переживает colcon build). deploy_config_dir добавляется как есть.
+        dirs: List[str] = []
+        pkg = self.deploy_driver_package.strip()
+
+        if pkg:
+            # install/share/<pkg>/config
+            try:
+                from ament_index_python.packages import get_package_share_directory
+                share = get_package_share_directory(pkg)
+                dirs.append(os.path.join(share, "config"))
+            except Exception:
+                pass
+            # src/**/<pkg>/config — ищем каталог пакета по package.xml
+            if self.workspace_src and os.path.isdir(self.workspace_src):
+                import glob
+                for pxml in glob.glob(
+                    os.path.join(self.workspace_src, "**", pkg, "package.xml"),
+                    recursive=True,
+                ):
+                    dirs.append(os.path.join(os.path.dirname(pxml), "config"))
+
+        if self.deploy_config_dir.strip():
+            dirs.append(os.path.expanduser(self.deploy_config_dir.strip()))
+
+        # Дедуп с сохранением порядка.
+        seen = set()
+        uniq: List[str] = []
+        for d in dirs:
+            real = os.path.normpath(d)
+            if real not in seen:
+                seen.add(real)
+                uniq.append(real)
+        return uniq
+
+    def _deploy_current_calibration(self) -> Tuple[bool, str]:
+        if not self._calibrated:
+            return False, "Calibration not performed"
+        if self._image_size is None:
+            return False, "Unknown image size"
+
+        targets = self._resolve_deploy_dirs()
+        if not targets:
+            return False, (
+                "No deploy target: set deploy_driver_package "
+                "(e.g. a733_csi_cam_ros2) or deploy_config_dir"
+            )
+
+        # Гарантируем актуальный YAML на диске (последний сохранённый может
+        # относиться к прошлой калибровке).
+        ok, saved = self._save_yaml()
+        if not ok:
+            return False, f"Save failed: {saved}"
+
+        w, h = self._image_size
+        filename = f"{self.sensor_name}_{int(w)}x{int(h)}.yaml"
+
+        import shutil
+        written: List[str] = []
+        errors: List[str] = []
+        for target_dir in targets:
+            try:
+                os.makedirs(target_dir, exist_ok=True)
+                dst = os.path.join(target_dir, filename)
+                shutil.copyfile(saved, dst)
+                written.append(dst)
+            except Exception as e:
+                errors.append(f"{target_dir}: {e}")
+
+        if not written:
+            return False, f"Deploy failed for all targets: {'; '.join(errors)}"
+
+        self._last_deployed_yaml = written[0]
+        msg = f"Deployed {filename} to {len(written)} location(s): " + ", ".join(written)
+        if errors:
+            msg += f" | skipped: {'; '.join(errors)}"
+        self._publish_status(msg)
+        self._publish_state()
+        return True, msg
+
     def _publish_overlay(self, frame_bgr: np.ndarray) -> None:
         try:
             msg = self._bridge.cv2_to_imgmsg(frame_bgr, encoding="bgr8")
@@ -829,8 +1073,19 @@ class CameraCalibrationNode(Node):
                 "reprojection_error": float(self._calib_result.get("reprojection_error", 0.0)) if self._calibrated else None,
                 "rms": float(self._calib_result.get("rms", 0.0)) if self._calibrated else None,
                 "distortion_model": self._calib_result.get("distortion_model", ""),
+                "frames_used": self._calib_result.get("frames_used") if self._calibrated else None,
+                "dropped_outliers": self._calib_result.get("dropped_outliers") if self._calibrated else None,
+                "dropped_illcond": self._calib_result.get("dropped_illcond") if self._calibrated else None,
             },
+            "max_frame_reproj": float(self.max_frame_reproj),
             "last_saved_yaml": self._last_saved_yaml or "",
+            "last_deployed_yaml": self._last_deployed_yaml or "",
+            "auto_deploy": bool(self.auto_deploy),
+            "auto_deploy_max_reproj": float(self.auto_deploy_max_reproj),
+            "deploy_driver_package": self.deploy_driver_package,
+            "deploy_config_dir": self.deploy_config_dir,
+            "deploy_targets": self._resolve_deploy_dirs(),
+            "sensor_name": self.sensor_name,
             "captures": [asdict(c) for c in self._captures],
         }
 
@@ -907,7 +1162,9 @@ def main(args=None) -> None:
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        # В batch-режиме нода могла сама вызвать rclpy.shutdown() — не дублируем.
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
