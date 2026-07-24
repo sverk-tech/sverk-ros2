@@ -1,0 +1,10 @@
+rosserial_bridge:
+  ros__parameters:
+    port: /dev/ttyS4
+    baud: 57600
+    reconnect_delay: 2.0
+    max_payload_size: 4096
+    topic_request_interval: 1.0
+    stats_log_interval: 10.0
+    diagnostics_topic: /rosserial_ros2_bridge/diagnostics
+    diagnostics_period: 1.0
