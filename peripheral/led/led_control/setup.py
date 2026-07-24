@@ -13,6 +13,7 @@ setup(
         ("share/" + package_name + "/config", ["config/led_params.yaml"]),
     ],
     install_requires=["setuptools", "PyYAML"],
+    # extras_require={"spidev": ["spidev"], "uart": ["pyserial"]},
     zip_safe=True,
     maintainer="Niklas Rousset",
     maintainer_email="byrousset@gmail.com",

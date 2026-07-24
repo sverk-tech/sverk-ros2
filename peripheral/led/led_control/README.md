@@ -1,25 +1,22 @@
 # Работа со светодиодной лентой (ROS2)
 
-Документация по управлению адресуемой лентой WS2812 через ноду **led_control** в ROS2 Humble.
+Документация по управлению адресуемой лентой **WS2812** через ноду **led_control** в ROS2 Humble.
 
-Лента подключается к Raspberry Pi 5 по SPI (пин 19 или 38). Каждый светодиод может принимать один из 16 млн цветов (24 бита). Это позволяет отображать режимы полёта, этапы программы или уведомления.
+Тайминги WS2812 кодируются потоком байт на **SPI MOSI**. В текущей runtime-конфигурации нода использует **`ws2812_spidev`** и при его недоступности — **`rpi5_ws2812`** (см. `led_node.py`).
+
+Ветви **`ws2812_mraa`** и **`ws2812_uart`** сохранены в проекте и документации для дальнейшей разработки, но их использование в основной ветке запуска сейчас закомментировано.
+
+Каждый светодиод — 24 бита цвета (GRB на шине). Лента может отображать режимы полёта, этапы программы и уведомления.
 
 ---
 
-## Подготовка
+## Raspberry Pi (кратко)
 
-1. **Подключение ленты**  
-   - **DIN** ленты → **MOSI** Raspberry Pi (физический пин **19** для SPI0 или **38** для SPI1).  
-   - **GND** и **5 V** — к питанию (для длинных лент рекомендуется внешний блок питания 5 V и общая земля с Pi).
+1. **Подключение:** DIN → MOSI (часто пин **19** для SPI0 или **38** для SPI1), GND и 5 V — см. выше про ток.
+2. **SPI:** `raspi-config` → Interfacing Options → SPI; для второго контроллера — overlay в `/boot/firmware/config.txt` (например `dtoverlay=spi1-1cs`), перезагрузка.
+3. **Запасной драйвер:** при необходимости `pip install rpi5-ws2812` (если не используются `ws2812_mraa` и `ws2812_spidev`).
 
-2. **Включение SPI**  
-   Включите SPI в `raspi-config` → Interfacing Options → SPI. Для второго канала (пин 38) добавьте в `/boot/firmware/config.txt` строку `dtoverlay=spi1-1cs` и перезагрузитесь.
-
-3. **Установка**  
-   - Установите пакет драйвера: `pip install rpi5-ws2812`.  
-   - Соберите ROS2-пакеты в workspace (см. ниже).
-
-> **Важно:** Лента может потреблять большой ток. Не питайте длинную ленту только от Raspberry Pi — используйте отдельный BEC или блок питания 5 V.
+> **Важно:** Лента может потреблять большой ток. Не питайте длинную ленту только от вывода 5 V платы — используйте отдельный BEC или блок питания 5 V и общую землю.
 
 ---
 
@@ -79,10 +76,10 @@ ros2 launch led_control led.launch.py [config:=<путь к YAML>]
 | Параметр | Тип | По умолчанию | Описание |
 |----------|-----|--------------|----------|
 | `led_count` | int | `58` | Количество светодиодов в ленте. |
-| `spi_bus` | int | `0` | Номер шины SPI: `0` — SPI0 (физический пин 19, GPIO10), `1` — SPI1 (физический пин 38, GPIO20). |
-| `spi_device` | int | `0` | Номер устройства на шине (Chip Select): обычно `0` (`/dev/spidev<bus>.<device>`). |
-| `brightness` | int/float | `100` | Яркость ленты в процентах (0–100). Реализовано через [rpi5-ws2812](https://github.com/petayyyy/rpi5-ws2812) `set_brightness(0.0–1.0)`. |
-| `state_publish_rate` | float | `10.0` | Частота публикации топика `/led/state` (Гц). |
+| `spi_bus` | int | `0` | С **MRAA**: логический номер SPI (часто `0`). С **spidev**: индекс **X** в `/dev/spidevX.Y` (`ls /dev/spidev*`). |
+| `spi_device` | int | `0` | С **spidev**: **Y** в `/dev/spidevX.Y`. С **MRAA**: не переключает CS (поле для совместимости YAML). |
+| `brightness` | int/float | `100` | Яркость 0–100 %; внутри `set_brightness(0.0–1.0)` у драйвера ленты. |
+| `state_publish_rate` | float | `10.0` | Частота публикации топика `/led_control/state` (Гц). |
 | `animation_rate` | float | `30.0` | Частота обновления анимации эффектов (Гц). |
 
 #### Параметры визуализации событий (Events)
@@ -99,7 +96,7 @@ ros2 launch led_control led.launch.py [config:=<путь к YAML>]
 
 ### Сервисы
 
-#### 1. `/led/set_effect`
+#### 1. `/led_control/set_effect`
 
 **Тип:** `led_interfaces/srv/SetLEDEffect`
 
@@ -122,12 +119,12 @@ ros2 launch led_control led.launch.py [config:=<путь к YAML>]
 
 **Пример вызова:**
 ```bash
-ros2 service call /led/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fill', r: 255, g: 0, b: 0}"
+ros2 service call /led_control/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fill', r: 255, g: 0, b: 0}"
 ```
 
 ---
 
-#### 2. `/led/set_leds`
+#### 2. `/led_control/set_leds`
 
 **Тип:** `led_interfaces/srv/SetLEDs`
 
@@ -147,7 +144,7 @@ ros2 service call /led/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fil
 
 **Пример вызова:**
 ```bash
-ros2 service call /led/set_leds led_interfaces/srv/SetLEDs "{leds: [{index: 0, r: 255, g: 0, b: 0}, {index: 1, r: 0, g: 255, b: 0}]}"
+ros2 service call /led_control/set_leds led_interfaces/srv/SetLEDs "{leds: [{index: 0, r: 255, g: 0, b: 0}, {index: 1, r: 0, g: 255, b: 0}]}"
 ```
 
 ---
@@ -158,7 +155,7 @@ ros2 service call /led/set_leds led_interfaces/srv/SetLEDs "{leds: [{index: 0, r
 
 | Топик | Тип | Частота | Описание |
 |-------|-----|---------|----------|
-| `/led/state` | `led_interfaces/msg/LEDStateArray` | По параметру `state_publish_rate` (по умолчанию 10 Гц) | Текущее состояние ленты: массив сообщений `LEDState` с полями `index`, `r`, `g`, `b` для каждого светодиода. Длина массива равна `led_count`. |
+| `/led_control/state` | `led_interfaces/msg/LEDStateArray` | По параметру `state_publish_rate` (по умолчанию 10 Гц) | Текущее состояние ленты: массив сообщений `LEDState` с полями `index`, `r`, `g`, `b` для каждого светодиода. Длина массива равна `led_count`. |
 
 **Структура сообщения `LEDStateArray`:**
 - `leds` — массив `LEDState[]`.
@@ -267,7 +264,7 @@ led_node:
 
 ## Высокоуровневое управление (эффекты)
 
-Сервис **`/led/set_effect`** переключает эффект и цвет ленты.
+Сервис **`/led_control/set_effect`** переключает эффект и цвет ленты.
 
 **Аргументы:**
 
@@ -291,13 +288,13 @@ led_node:
 
 ```bash
 # Заливка красным
-ros2 service call /led/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fill', r: 255, g: 0, b: 0}"
+ros2 service call /led_control/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fill', r: 255, g: 0, b: 0}"
 
 # Плавный переход к синему
-ros2 service call /led/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fade', r: 0, g: 0, b: 255}"
+ros2 service call /led_control/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'fade', r: 0, g: 0, b: 255}"
 
 # Радуга
-ros2 service call /led/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'rainbow', r: 0, g: 0, b: 0}"
+ros2 service call /led_control/set_effect led_interfaces/srv/SetLEDEffect "{effect: 'rainbow', r: 0, g: 0, b: 0}"
 ```
 
 ### Пример на Python
@@ -311,9 +308,9 @@ from led_interfaces.srv import SetLEDEffect
 class LedClient(Node):
     def __init__(self):
         super().__init__("led_client")
-        self.client = self.create_client(SetLEDEffect, "led/set_effect")
+        self.client = self.create_client(SetLEDEffect, "/led_control/set_effect")
         while not self.client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Waiting for /led/set_effect...")
+            self.get_logger().info("Waiting for /led_control/set_effect...")
 
     def set_effect(self, effect="fill", r=255, g=0, b=0):
         req = SetLEDEffect.Request()
@@ -344,14 +341,14 @@ if __name__ == "__main__":
 
 ## Низкоуровневое управление (отдельные светодиоды)
 
-Сервис **`/led/set_leds`** задаёт цвет выбранных светодиодов по индексу и RGB.
+Сервис **`/led_control/set_leds`** задаёт цвет выбранных светодиодов по индексу и RGB.
 
 **Запрос:** массив сообщений с полями `index`, `r`, `g`, `b`.
 
 ### Пример из командной строки
 
 ```bash
-ros2 service call /led/set_leds led_interfaces/srv/SetLEDs "{
+ros2 service call /led_control/set_leds led_interfaces/srv/SetLEDs "{
   leds: [
     {index: 0, r: 255, g: 0, b: 0},
     {index: 1, r: 0, g: 255, b: 0},
@@ -372,9 +369,9 @@ from led_interfaces.srv import SetLEDs
 class LedClient(Node):
     def __init__(self):
         super().__init__("led_client")
-        self.client = self.create_client(SetLEDs, "led/set_leds")
+        self.client = self.create_client(SetLEDs, "/led_control/set_leds")
         while not self.client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info("Waiting for /led/set_leds...")
+            self.get_logger().info("Waiting for /led_control/set_leds...")
 
     def set_leds(self, leds_list):
         req = SetLEDs.Request()
@@ -406,12 +403,12 @@ if __name__ == "__main__":
 
 ## Топик состояния ленты
 
-Текущее состояние ленты публикуется в топике **`/led/state`** (тип `led_interfaces/msg/LEDStateArray`): массив сообщений с полями `index`, `r`, `g`, `b` для каждого светодиода.
+Текущее состояние ленты публикуется в топике **`/led_control/state`** (тип `led_interfaces/msg/LEDStateArray`): массив сообщений с полями `index`, `r`, `g`, `b` для каждого светодиода.
 
 Просмотр из терминала:
 
 ```bash
-ros2 topic echo /led/state
+ros2 topic echo /led_control/state
 ```
 
 Получение количества светодиодов в Python:
@@ -421,7 +418,7 @@ from led_interfaces.msg import LEDStateArray
 
 # В ноде или подписчике:
 msg = node.create_subscription(
-    LEDStateArray, "led/state", callback, 10
+    LEDStateArray, "/led_control/state", callback, 10
 )
 # В callback или через wait_for_message:
 # led_count = len(msg.leds)
@@ -439,16 +436,18 @@ colcon build --packages-up-to led_control
 source install/setup.bash
 ```
 
-Перед сборкой установите зависимости:
+Перед сборкой установите зависимости на **целевой** машине:
 
-- `pip install rpi5-ws2812`
-- ROS2 Humble: `ros-humble-rclpy`, пакеты из `package.xml` (интерфейсы, launch и т.д.)
+- **MRAA + Python**: см. [установку MRAA для RK3588 / Bookworm](#mraa-install-rk3588) (модуль `mraa` для того же `python3`, что запускает ROS).
+- Опционально **`spidev`**: `pip install spidev` или `pip install .[spidev]` из пакета, если нужен запасной путь `ws2812_spidev`.
+- Опционально **`rpi5-ws2812`**: последний запасной импорт в `led_node.py`.
+- ROS2 Humble: `ros-humble-rclpy`, пакеты из `package.xml` (интерфейсы, launch и т.д.).
 
 ---
 
 ## Использование в Docker
 
-Для работы ноды в контейнере нужен доступ к SPI-устройству и привилегированный режим:
+Для работы ноды в контейнере нужен доступ к **SPI** на хосте (те же `/dev/spidev*`, что видит MRAA/spidev), и обычно повышенные права:
 
 ```bash
 docker run --device /dev/spidev0.0 --privileged --network host YOUR_ROS2_IMAGE ros2 launch led_control led.launch.py
@@ -466,5 +465,5 @@ services:
     command: ros2 launch led_control led.launch.py
 ```
 
-Для ленты на втором SPI (пин 38) используйте `/dev/spidev1.0` и в конфиге задайте `spi_bus: 1`.
+Подставьте вместо `/dev/spidev0.0` фактический путь (например `/dev/spidev1.0`) и синхронизируйте `spi_bus` / `spi_device` в YAML с этими номерами.
 

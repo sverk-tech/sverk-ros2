@@ -4,13 +4,30 @@
 
 led_node:
   ros__parameters:
-    # --- LED strip and SPI ---
+    # --- LED strip transport ---
+    # Runtime currently supports SPI path only (spidev, then rpi5_ws2812 fallback).
+    # Keep "auto" or "spi". "uart" settings are preserved below for development.
+    led_transport: auto
+
+    # --- SPI backend ---
     # For a wide frame 112 LEDs, for a standard frame 104
     led_count: 112
+    # spi_bus / spi_device are the numbers from /dev/spidevX.Y (see ReadMe.md -> Radxa CM5)
+    # Per-board override happens in full_system_real.launch.py (LED_SPI dict) —
+    # these are just the fallback for a standalone `ros2 launch led_control led.launch.py`.
     spi_bus: 1
     spi_device: 0
-    # LED strip brightness 0–100 % (rpi5-ws2812 library: set_brightness(0.0–1.0))
-    # Default normal brightness when battery voltage is above the safe threshold.
+
+    # --- UART backend (disabled at runtime, kept for development) ---
+    # uart_device: "/dev/ttyS2"
+    # uart_baudrate: 2500000
+    # Encoded symbols for one WS2812 bit (0/1)
+    # uart_bit0_symbol: 192   # 0xC0
+    # uart_bit1_symbol: 248   # 0xF8
+    # Pause between frames, microseconds
+    # uart_reset_us: 80
+    # Brightness 0-100% (converted internally to set_brightness 0.0-1.0)
+    # Default normal brightness when battery voltage is above the safe threshold
     brightness: 30.0
     brightness_low_battery: 1.0
     
@@ -24,17 +41,17 @@ led_node:
     fmu_out_prefix: "/fmu/out"
     fmu_in_prefix: "/fmu/in"
 
-    # Timeout for loss of connection with flight controller (sec) → disconnected event
+    # Timeout for loss of connection with flight controller (sec) -> disconnected event
     vehicle_status_timeout: 2.0
 
     # Battery (BatteryStatus): low_battery indication based on voltage per cell (voltage_v / cell_count).
-    # If voltage per cell is below this threshold (V) — the low_battery event is triggered. The event is ignored if data is invalid.
+    # If voltage per cell is below this threshold (V), the low_battery event is triggered. The event is ignored if data is invalid.
     battery_min_voltage_per_cell: 3.5
 
     battery_min_voltage: 6.0
 
-    # Event effects table: key — event name, value — { effect?: string, r, g, b } (effect defaults to fill).
-    # For any event, you can specify effect: none — then it is disabled, nothing is assigned or considered (full customization of the event set).
+    # Event effects table: key - event name, value - { effect?: string, r, g, b } (effect defaults to fill).
+    # For any event, you can specify effect: none - then it is disabled and skipped.
     events: |
       startup:        { r: 255, g: 255, b: 255 }
       connected:      { effect: rainbow }

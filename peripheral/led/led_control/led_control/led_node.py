@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 ROS2 LED node for WS2812 strip.
-- Service /led/set_effect (effect, r, g, b)
-- Service /led/set_leds (low-level per-LED)
-- Topic /led/state (current strip state)
+- Active backend path: ws2812_spidev, fallback to rpi5_ws2812.
+- MRAA/UART runtime branches are intentionally commented out for development.
+- Service /led_control/set_effect (effect, r, g, b)
+- Service /led_control/set_leds (low-level per-LED)
+- Topic /led_control/state (current strip state)
 - Event visualization from PX4: /fmu/out/vehicle_status, /fmu/out/battery_status, /rosout (config in led_params.yaml)
   See: https://docs.px4.io/main/en/ros2/user_guide, https://docs.px4.io/main/en/middleware/dds_topics
 """
@@ -16,7 +18,11 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
-from rpi5_ws2812.ws2812 import Color, WS2812SpiDriver
+try:
+    from led_control.ws2812_spidev import Color, WS2812SpiDriver
+except ImportError:
+    from rpi5_ws2812.ws2812 import Color, WS2812SpiDriver  # type: ignore[no-redef]
+### from led_control.ws2812_mraa import Color, WS2812SpiDriver
 
 from led_interfaces.msg import LEDState, LEDStateArray
 from led_interfaces.srv import SetLEDEffect, SetLEDs
@@ -138,8 +144,14 @@ class LEDNode(Node):
         super().__init__("led_node")
 
         self.declare_parameter("led_count", 58)
+        self.declare_parameter("led_transport", "auto")
         self.declare_parameter("spi_bus", 0)
         self.declare_parameter("spi_device", 0)
+        self.declare_parameter("uart_device", "/dev/ttyS2")
+        self.declare_parameter("uart_baudrate", 2500000)
+        self.declare_parameter("uart_bit0_symbol", 192)
+        self.declare_parameter("uart_bit1_symbol", 248)
+        self.declare_parameter("uart_reset_us", 80)
         self.declare_parameter("brightness", 100.0)
         self.declare_parameter("brightness_low_battery", 1.0)
         self.declare_parameter("state_publish_rate", 10.0)
@@ -152,17 +164,44 @@ class LEDNode(Node):
         self.declare_parameter("events", "")
 
         led_count = self.get_parameter("led_count").get_parameter_value().integer_value
+        led_transport = self.get_parameter("led_transport").get_parameter_value().string_value.strip().lower()
         spi_bus = self.get_parameter("spi_bus").get_parameter_value().integer_value
         spi_device = self.get_parameter("spi_device").get_parameter_value().integer_value
+        uart_device = self.get_parameter("uart_device").get_parameter_value().string_value
+        uart_baudrate = self.get_parameter("uart_baudrate").get_parameter_value().integer_value
+        uart_bit0_symbol = self.get_parameter("uart_bit0_symbol").get_parameter_value().integer_value
+        uart_bit1_symbol = self.get_parameter("uart_bit1_symbol").get_parameter_value().integer_value
+        uart_reset_us = self.get_parameter("uart_reset_us").get_parameter_value().integer_value
 
         self.get_logger().info(
-            f"Initializing strip: led_count={led_count}, spi_bus={spi_bus}, spi_device={spi_device}"
+            "Initializing strip: led_count=%d, transport=%s, spi_bus=%d, spi_device=%d, "
+            "uart_device=%s, uart_baudrate=%d"
+            % (
+                led_count,
+                led_transport,
+                spi_bus,
+                spi_device,
+                uart_device,
+                uart_baudrate,
+            )
         )
+        if led_transport == "uart":
+            self.get_logger().warn(
+                "led_transport='uart' is temporarily disabled in runtime. Falling back to SPI path."
+            )
         try:
-            driver = WS2812SpiDriver(spi_bus=spi_bus, spi_device=spi_device, led_count=led_count)
+            if led_transport in ("auto", "spi", "uart"):
+                driver = WS2812SpiDriver(
+                    spi_bus=spi_bus, spi_device=spi_device, led_count=led_count
+                )
+            else:
+                raise ValueError(
+                    "Unsupported led_transport='%s'. Use: auto|spi|uart"
+                    % led_transport
+                )
             self._strip = driver.get_strip()
         except Exception as e:
-            self.get_logger().error(f"Failed to open SPI strip: {e}")
+            self.get_logger().error(f"Failed to initialize LED strip backend: {e}")
             raise
 
         brightness_low_batt_pct = max(
@@ -219,11 +258,11 @@ class LEDNode(Node):
         self._logged_no_vehicle_status: bool = False
         self._battery_seen: bool = False
 
-        self._state_pub = self.create_publisher(LEDStateArray, "led/state", 10)
+        self._state_pub = self.create_publisher(LEDStateArray, "/led_control/state", 10)
         self._set_effect_srv = self.create_service(
-            SetLEDEffect, "led/set_effect", self._cb_set_effect
+            SetLEDEffect, "/led_control/set_effect", self._cb_set_effect
         )
-        self._set_leds_srv = self.create_service(SetLEDs, "led/set_leds", self._cb_set_leds)
+        self._set_leds_srv = self.create_service(SetLEDs, "/led_control/set_leds", self._cb_set_leds)
 
         state_rate = self.get_parameter("state_publish_rate").get_parameter_value().double_value
         anim_rate = self.get_parameter("animation_rate").get_parameter_value().double_value

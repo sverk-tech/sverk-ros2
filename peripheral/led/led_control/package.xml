@@ -3,7 +3,7 @@
 <package format="3">
   <name>led_control</name>
   <version>0.0.1</version>
-  <description>ROS2 Humble node for WS2812 LED strip (PX4 event visualization), uses rpi5-ws2812 over SPI</description>
+  <description>ROS2 Humble node for WS2812 LED strip (PX4 event visualization); active runtime path is spidev (ws2812_spidev) with rpi5_ws2812 fallback. MRAA/UART paths are kept for development.</description>
   <maintainer email="petayyyy@gmail.com">Petayyyy</maintainer>
   <license>MIT</license>
 
@@ -12,8 +12,9 @@
   <depend>std_msgs</depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
+  <!-- <exec_depend>python3-serial</exec_depend> -->
 
-  <exec_depend>rpi5-ws2812</exec_depend>
+  <!-- Optional: pip install rpi5-ws2812 for Raspberry Pi fallback import in led_node.py -->
 
   <!-- For PX4 topic event visualization: add px4_msgs to the workspace (see PX4 ROS 2 docs) -->
   <exec_depend>rcl_interfaces</exec_depend>
