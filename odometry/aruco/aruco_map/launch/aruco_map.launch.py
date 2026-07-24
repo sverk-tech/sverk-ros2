@@ -61,7 +61,7 @@ def generate_launch_description():
         # Base
         DeclareLaunchArgument('frame_id', default_value='map'),
         DeclareLaunchArgument('marker_size', default_value='0.16'),
-        DeclareLaunchArgument('topic_name', default_value='map_markers'),
+        DeclareLaunchArgument('topic_name', default_value='/aruco/map/markers'),
         # Comment out the launch argument below and uncomment the one under it to fetch the map file config from /install instead of /src
         DeclareLaunchArgument(
             'map_file',
@@ -78,7 +78,7 @@ def generate_launch_description():
 #        ),
 
         # Debug images publishing/timing
-        DeclareLaunchArgument('debug_image_topic_prefix', default_value='aruco_map/debug_image/plane_'),
+        DeclareLaunchArgument('debug_image_topic_prefix', default_value='/aruco/vis/map_debug_image/plane_'),
         DeclareLaunchArgument('debug_image_publish_rate_hz', default_value='1.0'),
 
         # Plane clustering parameters

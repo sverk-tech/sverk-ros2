@@ -40,7 +40,7 @@ public:
   {
     this->declare_parameter<std::string>("frame_id", "map");
     this->declare_parameter<double>("marker_size", 0.16);  // meters
-    this->declare_parameter<std::string>("topic_name", "map_markers");
+    this->declare_parameter<std::string>("topic_name", "/aruco/map/markers");
 
     // Debug images per plane
     this->declare_parameter<bool>("publish_debug_images", true);
@@ -51,7 +51,7 @@ public:
     this->declare_parameter<int>("debug_image_max_size_px", 4096);
     this->declare_parameter<std::string>(
       "debug_image_topic_prefix",
-      "aruco_map/debug_image/plane_"
+      "/aruco/vis/map_debug_image/plane_"
     );
 
     // Debug frame rendering parameters
@@ -864,7 +864,7 @@ private:
   // Class members
   std::string frame_id_{"world"};
   double marker_size_{0.16};
-  std::string topic_name_{"map_markers"};
+  std::string topic_name_{"/aruco/map/markers"};
   std::string map_file_{"/config/markers.txt"};
   double debug_image_publish_rate_hz_{1.0};
 
@@ -875,7 +875,7 @@ private:
   double debug_pixels_per_meter_{500.0};
   int debug_image_margin_px_{40};
   int debug_image_max_size_px_{4096};
-  std::string debug_image_topic_prefix_{"aruco_map/debug_image/plane_"};
+  std::string debug_image_topic_prefix_{"/aruco/vis/map_debug_image/plane_"};
 
   // Debug draw toggles
   std::string debug_aruco_dictionary_name_{"DICT_4X4_50"};
