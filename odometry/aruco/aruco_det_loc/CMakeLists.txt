@@ -9,7 +9,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 find_package(rclcpp REQUIRED)
-find_package(rclcpp_components REQUIRED)  # Item 5: component composition
+find_package(rclcpp_components REQUIRED)  # component composition
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -78,7 +78,7 @@ set(TF_DEPS
 )
 
 # ---------------------------------------------------------------------------
-# Item 5: aruco_detect — build as shared library for component composition.
+# aruco_detect — build as shared library for component composition.
 # rclcpp_components_register_node also creates the standalone executable.
 # ---------------------------------------------------------------------------
 add_library(aruco_detect_component SHARED src/aruco_detect_node.cpp)
@@ -98,7 +98,7 @@ install(TARGETS aruco_detect_component
 )
 
 # ---------------------------------------------------------------------------
-# Item 5: aruco_loc — build as shared library for component composition.
+# aruco_loc — build as shared library for component composition.
 # ---------------------------------------------------------------------------
 add_library(aruco_loc_component SHARED src/aruco_loc_node.cpp)
 ament_target_dependencies(aruco_loc_component ${LOC_DEPS})
