@@ -1,0 +1,73 @@
+# self_check: пороги и топики по умолчанию.
+# Платформенные файлы (rpi.yaml, radxa.yaml, rdx.yaml, orange.yaml,
+# orange_3w.yaml) переопределяют здесь только реальные отличия — их
+# значения накладываются поверх этого файла (deep-merge), см. context.py.
+
+battery_cells: 4
+
+topics:
+  vehicle_status: /fmu/out/vehicle_status
+  battery_status: /fmu/out/battery_status
+  timesync_status: /fmu/out/timesync_status
+  failsafe_flags: /fmu/out/failsafe_flags
+  estimator_status_flags: /fmu/out/estimator_status_flags
+  vehicle_attitude: /fmu/out/vehicle_attitude
+  vehicle_odometry: /fmu/out/vehicle_odometry
+  vehicle_local_position: /fmu/out/vehicle_local_position
+  distance_sensor: /fmu/out/distance_sensor
+  input_rc: /fmu/out/input_rc
+  sensor_combined: /fmu/out/sensor_combined
+  visual_odometry: /fmu/in/vehicle_visual_odometry
+  markers: /aruco/det/markers
+  map_markers: /aruco/map/markers
+  pose_cov: /aruco/loc/pose_cov
+  world_pose: /aruco/world_pose
+  reset_counter: /aruco/reset_counter
+  offboard_status: /offboard_control/status
+  scan: /scan
+
+camera:
+  image_topic: /camera_1/image_raw
+  info_topic: /camera_1/camera_info
+  expected_fps: 30
+
+motors:
+  count: 4
+  test_throttle: 0.15
+  test_timeout_s: 3.0
+  question_timeout_s: 45.0   # сколько ждать ответ «крутится/направление верное?»
+
+thresholds:
+  tilt_deg: 2.0
+  vpe_pos_m: 0.5
+  vpe_yaw_deg: 8.0
+  still_vel_ms: 0.1
+  min_cell_v: 3.5
+  min_disk_gb: 1.0
+  max_cpu_pct: 85
+  max_temp_c: 80
+  timesync_offset_ms: 50.0
+  camera_fps_tolerance_pct: 30.0
+
+features:
+  aruco: true
+  vio: true
+  rc: true
+  lidar: false
+  led: true
+  rangefinder: false
+
+expected_nodes:
+  - offboard_control
+  - fmu_control          # нода из calibration_control.launch.py (name='fmu_control')
+  - aruco_container
+  - rosboard
+  - ros_services_bridge
+
+expected_services:
+  - /fmu_control/motor_test
+  - /fmu_control/stop_all_motors
+  - /fmu_control/get_param
+  - /get_telemetry       # offboard_control объявляет сервис в глобальном пространстве
+
+web_ports: [9090, 8888, 8080]

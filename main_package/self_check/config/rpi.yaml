@@ -1,0 +1,3 @@
+# Raspberry Pi 5: отличий от default.yaml по составу проверок нет
+# (камера libcamera публикует в те же топики). sbc_health сам определяет
+# доступность vcgencmd/vchiq по наличию /dev/vchiq.

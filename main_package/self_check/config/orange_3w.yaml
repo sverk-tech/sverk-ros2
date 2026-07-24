@@ -1,0 +1,9 @@
+# Orange Pi Zero 3W: слабее по CPU, чем RK3588S-платы — держим дефолтные
+# пороги, но не ждём вычислительно тяжёлые подсистемы (ИИ и т.п.) в графе.
+features:
+  aruco: true
+  vio: true
+  rc: true
+  lidar: false
+  led: true
+  rangefinder: false

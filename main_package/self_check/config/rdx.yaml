@@ -1,0 +1,3 @@
+# Horizon RDK X3: DDS принудительно на UDPv4 (root/sverk SHM-конфликт под
+# /opt/tros) — на состав self_check-проверок не влияет, отличий от
+# default.yaml нет.

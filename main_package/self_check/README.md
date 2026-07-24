@@ -1,71 +1,154 @@
-## Автоматическая проверка (self_check)
+## Диагностика дрона (self_check)
 
-Пакет `self_check` содержит скрипт `selfcheck.py` для **самодиагностики**: проверяет, что ключевые подсистемы (PX4 DDS/px4_msgs, камера, ArUco, VPE и состояние бортового компьютера) **работают и публикуют данные**.
+`self_check` — нода-оркестратор диагностики дрона. Раньше это был
+одноразовый CLI-скрипт (`selfcheck.py`); теперь это постоянно работающая
+ROS-нода с action-API, каталогом из **пассивных** (сами по топикам/
+параметрам) и **интерактивных** (с инструкциями пользователю вида «покрутите
+дрон», «снимите пропеллеры») проверок и структурированным JSON-отчётом.
+Это серверная половина вкладки «Проверка системы» веб-QGC (`web/qgc`) —
+веб слой рендерит то, что отдаёт эта нода, вся логика проверок живёт здесь.
 
-### Запуск
+Полный контракт интерфейсов и схем — `docs/dev/tz/system_check/00_contract.md`.
 
-```bash
-ros2 run self_check selfcheck.py
+### Архитектура
+
+```
+self_check_interfaces/           # srv/action (ament_cmake, отдельный пакет)
+  srv/ListChecks.srv             # -> список манифестов ИЛИ последний отчёт
+  srv/UserInput.srv               # ответ пользователя на WAITING_USER-шаг
+  action/RunChecks.action         # запуск прогона + live-feedback
+
+self_check/                       # ament_python
+  config/
+    default.yaml                  # пороги + топики по умолчанию
+    rpi.yaml radxa.yaml rdx.yaml orange.yaml orange_3w.yaml   # оверрайды по платформе
+  self_check/
+    node.py                       # нода-оркестратор: action + сервисы
+    context.py                    # CheckContext — API, которое видит каждая проверка
+    report.py                     # CheckResult, сборка report_json
+    profile.py                    # deep-merge default.yaml + config/<platform>.yaml
+    util.py                       # чистые пороговые функции (кватернионы, банки, VPE...)
+    cli.py                        # CLI-клиент action (ros2 run self_check selfcheck)
+    checks/
+      base.py                     # BaseCheck
+      __init__.py                 # REGISTRY = {id: BaseCheck-инстанс}
+      link.py power.py sensors.py vision.py motors.py sbc.py prearm.py
+  test/                           # pytest на чистую логику (без запущенной ROS-графа)
 ```
 
-### Что проверяется
+Нода **никогда не армит** дрон и не пишет параметры PX4 (только читает через
+`/fmu_control/get_param`).
 
-- **FCU (PX4 DDS)**: наличие связи с PX4 (`VehicleStatus`) и базовые статусы (`TimesyncStatus`, `FailsafeFlags`), а также расширенная проверка **батареи** по `BatteryStatus`.
-- **TelemetryStatus (PX4 DDS)**: вывод полей телеметрии из `TelemetryStatus` (если доступны в вашей версии `px4_msgs`).
-- **VehicleControlMode / flight mode (PX4 DDS)**: вывод **полетного режима** (по `VehicleStatus.nav_state`).
-- **PX4 Local Position (PX4 DDS)**: вывод локальной позиции PX4 (`VehicleLocalPosition`) одной строкой: позиция/скорости/heading/флаги валидности.
-- **IMU (PX4 DDS)**: обновление `SensorCombined`.
-- **Attitude (PX4 DDS)**: обновление `VehicleAttitude`, вывод углов и предупреждение при сильном наклоне.
-- **Local position (ArUco)**: обновление `PoseWithCovarianceStamped` из `--pose-topic`.
-- **Velocity estimation (from ArUco pose)**: оценка максимальных скоростей по окну измерений.
-- **Camera**: обновление `sensor_msgs/Image`.
-- **ArUco markers**: обновление массива маркеров (`--markers-topic`, тип через `--markers-pytype`).
-- **VPE (vision input vs PX4 estimate)**: сравнение входной одометрии (`--visual-odom-topic`) и PX4 odometry (`--vehicle-odometry-topic`).
-- **SBC health**: свободное место на диске + (на Raspberry Pi) `vcgencmd get_throttled`. В Docker без `/dev/vchiq` проверка троттлинга будет пропущена.
-- **CPU usage**: загрузка CPU по `/proc/stat`.
+### ROS API
 
-> Внимательно относитесь к строкам `WARNING`. Особенно к **Velocity estimation**: при проблемах с оценкой скоростей автономные режимы лучше не запускать.
+Нода: `self_check`.
 
-### Часто используемые параметры
+| Интерфейс | Имя | Назначение |
+|---|---|---|
+| action `RunChecks` | `/self_check/run` | запустить прогон, стримить feedback, вернуть `report_json` |
+| srv `ListChecks` | `/self_check/list` | манифесты всех проверок каталога (доступность — по профилю платформы) |
+| srv `ListChecks` | `/self_check/report` | последний отчёт в `checks_json` (`"null"`, если прогонов не было) |
+| srv `UserInput` | `/self_check/user_input` | ответ на текущий шаг `WAITING_USER` (`ok\|yes\|no\|skip`) |
 
-#### Топики PX4 DDS
+`RunChecks.Goal`:
 
-- `--vehicle-status-topic` (по умолчанию `/fmu/out/vehicle_status`)
-- `--vehicle-control-mode-topic` (по умолчанию `/fmu/out/vehicle_control_mode`)
-- `--telemetry-status-topic` (по умолчанию `/fmu/in/telemetry_status`)
-- `--vehicle-local-position-topic` (по умолчанию `/fmu/out/vehicle_local_position`)
-- `--imu-topic` (по умолчанию `/fmu/out/sensor_combined`)
-- `--attitude-topic` (по умолчанию `/fmu/out/vehicle_attitude`)
-- `--battery-topic` (по умолчанию `/fmu/out/battery_status`)
-- `--failsafe-topic` (по умолчанию `/fmu/out/failsafe_flags`)
-- `--estimator-flags-topic` (по умолчанию `/fmu/out/estimator_status_flags`)
+- `check_ids` — пусто = все применимые для платформы.
+- `interactive` — `false` = только пассивные проверки (быстрый прогон).
+- `confirm` — фраза `I_UNDERSTAND_PROPS_ARE_OFF`, обязательна, если в списке
+  `motor_spin` (иначе проверка мгновенно завершается `FAIL`, моторы не трогаются).
 
-#### VPE
+Один прогон одновременно — второй `goal` во время активного прогона
+отклоняется (`GoalResponse.REJECT`). Отмена goal (`cancel`) переводит прогон
+в `aborted`: текущая проверка донашивается до своего терминального состояния,
+`motor_spin` в любом случае (успех/отмена/исключение) шлёт
+`/fmu_control/stop_all_motors`.
 
-- `--visual-odom-topic` (по умолчанию `/fmu/in/vehicle_visual_odometry`)
-- `--vehicle-odometry-topic` (по умолчанию `/fmu/out/vehicle_odometry`)
-- `--vpe-compare-window` (сек), `--vpe-pos-threshold` (м), `--vpe-yaw-threshold-deg` (град)
+Порядок прогона: сначала все пассивные проверки из запрошенных (могут
+исполняться параллельно, пул 3–4 потока), затем — если `interactive=true` —
+интерактивные строго последовательно.
 
-#### ArUco / камера
+### Каталог проверок
 
-- `--pose-topic` (по умолчанию `/aruco_map/pose_cov`)
-- `--markers-topic` (по умолчанию `/markers`)
-- `--markers-pytype` (по умолчанию `aruco_det_loc.msg.MarkerArray`)
-- `--image-topic` (по умолчанию `/camera_1/image_raw`)
+ID проверок фиксированы контрактом (их знают и нода, и веб-UI) — см. таблицы
+в `00_contract.md §4`. Кратко по категориям:
 
-#### Батарея
+- **link** — `link_fmu`, `offboard_status`, `rc_sticks` (интерактивная)
+- **power** — `power_battery`
+- **sensors** — `calib_params`, `attitude_level`, `peripherals`,
+  `hold_still`, `orientation_tilt`, `yaw_rotation`, `raise_lower` (интерактивные)
+- **vision** — `camera_stream`, `aruco_pipeline`, `vpe_consistency`,
+  `aruco_show_map`, `move_1m` (интерактивные)
+- **motors** — `motor_spin` (интерактивная, **опасная**)
+- **sbc** — `sbc_health`, `ros_graph`, `web_services`, `led_test` (интерактивная)
+- **prearm** — `prearm_failsafe`, `estimator_flags`
 
-- `--battery-cells` (кол-во банок; если 0 — проверка “на банку” не выполняется)
-- `--battery-min-cell-v` (по умолчанию 3.50)
-- `--battery-min-remaining` (по умолчанию 0.20)
-- `--battery-warn-level` (по умолчанию 2)
-- `--battery-max-current-a` (0 = отключено)
-- `--battery-max-temp-c` (0 = отключено)
+Каждая проверка завершается одним из `PASS | WARN | FAIL | SKIP`. `SKIP`
+означает: подсистема отключена в профиле платформы, зависимый сервис/нода
+недоступны (например `fmu_control` не запущена — `calib_params` не FAIL, а
+SKIP), либо пользователь явно нажал «skip».
 
-### Отключение проверок
+### Профиль платформы
 
-Для отключения конкретной проверки используйте флаги `--no-*`, например:
+`config/default.yaml` задаёт топики/пороги/фичи по умолчанию,
+`config/<platform>.yaml` — только реальные отличия (deep-merge поверх
+default). Платформа выбирается параметром ноды `platform`
+(`RPI | RADXA | RDX | ORANGE | ORANGE_3W`, как в `full_system_real.launch.py`
+/ `MK_NAME`); `profile_file` — путь к произвольному YAML вместо файла платформы.
 
 ```bash
-ros2 run self_check selfcheck.py --no-vpe --no-sbc-health
+ros2 run self_check self_check_node --ros-args -p platform:=RPI
 ```
+
+### CLI-клиент
+
+```bash
+# Быстрый прогон (только пассивные проверки)
+ros2 run self_check selfcheck
+
+# Конкретные проверки
+ros2 run self_check selfcheck --only power_battery,link_fmu,sbc_health
+
+# Полный интерактивный прогон с вопросами через stdin
+ros2 run self_check selfcheck --interactive --confirm-props-off
+
+# Сохранить report_json в файл
+ros2 run self_check selfcheck --json /tmp/selfcheck_report.json
+```
+
+Флаги: `--only id,id`, `--interactive` (включает интерактивные проверки и
+задаёт вопросы через stdin), `--confirm-props-off` (подтверждение для
+`motor_spin`), `--json out.json`. `WARN`/`FAIL` — красным в выводе, в конце —
+сводка `pass/warn/fail/skip` и exit-код (`0`, если нет `FAIL`).
+
+### Как добавить новую проверку
+
+1. Определить класс-наследник `BaseCheck` в подходящем `checks/<категория>.py`
+   (`id`, `category`, `title`, `description`, при необходимости `interactive`/
+   `dangerous`, метод `available(profile)` и обязательный `run(ctx)`).
+2. В `run(ctx)` пользоваться `CheckContext` (`context.py`): `wait_for_message`,
+   `wait_for_updates`, `measure_rate`, `collect`, `collect_multi`,
+   `subscribe_latest`, `call_service`, `report(level, text)`, `metric(key,
+   value)`, для интерактивных — `instruct(text, metrics)` и
+   `wait_user(text, options, timeout_s)`. В конце выставить
+   `ctx.result.state` в `report.STATE_PASS/WARN/FAIL/SKIP`.
+3. Добавить инстанс в список `CHECKS` того же файла — реестр
+   (`checks/__init__.py`) подхватит его автоматически (падает с `RuntimeError`
+   при дублирующемся `id`).
+4. Если проверка вводит новые пороги/топики — добавить их в
+   `config/default.yaml`, при необходимости переопределить в платформенных
+   YAML.
+5. Обновить контракт `docs/dev/tz/system_check/00_contract.md §4`, если id —
+   часть межкомандного соглашения (веб-UI и dds-бэкенд его тоже используют).
+
+### Тесты
+
+```bash
+cd sverk_ws/src/sverk_drone/main_package/self_check
+python3 -m pytest test/
+```
+
+`test_util.py`, `test_profile.py`, `test_report.py` не зависят от rclpy/ROS.
+`test_registry.py` импортирует сгенерированные типы сообщений (`px4_msgs`,
+`offboard_interfaces`, `led_interfaces`, `aruco_det_loc`,
+`self_check_interfaces`) и поэтому пропускается (`importorskip`), если
+воркспейс не собран colcon-ом.
