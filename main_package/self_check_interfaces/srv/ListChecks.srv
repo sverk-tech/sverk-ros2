@@ -1,0 +1,2 @@
+---
+string checks_json   # JSON-массив манифестов проверок (схема в 00_contract.md §5)

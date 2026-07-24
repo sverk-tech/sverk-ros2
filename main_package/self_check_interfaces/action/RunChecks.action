@@ -1,0 +1,12 @@
+string[] check_ids   # пусто = все применимые для платформы
+bool interactive      # false = только пассивные (быстрая проверка)
+string confirm        # "I_UNDERSTAND_PROPS_ARE_OFF" — обязателен, если в списке motor_spin
+---
+bool success          # true, если прогон дошёл до конца (не прерван)
+string report_json    # полный отчёт (схема в 00_contract.md §6)
+---
+string check_id
+string state           # RUNNING | WAITING_USER | PASS | WARN | FAIL | SKIP
+float32 progress       # 0..1 — общий прогресс прогона
+string instruction     # текст инструкции пользователю (рус.), "" для пассивных
+string metrics_json    # JSON с живыми метриками шага (для отображения)

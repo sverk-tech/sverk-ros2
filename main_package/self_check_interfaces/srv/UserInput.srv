@@ -1,0 +1,5 @@
+string check_id      # какой проверке адресован ответ
+string response       # "ok" | "yes" | "no" | "skip"
+---
+bool accepted         # false, если сейчас нет шага WAITING_USER с таким id
+string message
