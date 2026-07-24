@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch', ['launch/vl53_scan_pipeline.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,7 +25,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'multi_vl53_node = sensors_broadcaster.multi_vl53_node:main'
+            'multi_vl53_node = sensors_broadcaster.multi_vl53_node:main',
+            'vl53_scan_fuser_node = sensors_broadcaster.vl53_scan_fuser_node:main',
         ],
     },
 )
