@@ -1,0 +1,75 @@
+<svg viewBox="0 0 580 370" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Сигнальный путь: серво и электромагнит</title>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.c{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#374151;text-anchor:middle}
+.ca{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#4338ca;text-anchor:middle}
+.cg{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#15803d;text-anchor:middle}
+.sub{font-size:9px;fill:#6b7280;text-anchor:middle}
+.h{font-size:12px;font-weight:700;fill:#111827;text-anchor:middle}
+</style>
+
+<text class="h" x="143" y="20">Сервопривод</text>
+<text class="h" x="437" y="20">Электромагнит</text>
+<line x1="290" y1="8" x2="290" y2="362" stroke="#e5e7eb" stroke-width="1"/>
+
+<!-- СЕРВО -->
+<rect class="b" x="20" y="32" width="245" height="40" rx="6"/>
+<text class="c" x="143" y="50">drone.gpio.servo_set_angle(90.0)</text>
+<text class="sub" x="143" y="64">публикует Float32 в ROS 2</text>
+
+<line x1="143" y1="72" x2="143" y2="88" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="a" x="20" y="92" width="245" height="40" rx="6"/>
+<text class="ca" x="143" y="110">/servo_node/target_angle_deg</text>
+<text class="sub" x="143" y="124">ROS 2 топик — servo_node читает угол</text>
+
+<line x1="143" y1="132" x2="143" y2="148" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="b" x="20" y="152" width="245" height="40" rx="6"/>
+<text class="c" x="143" y="170">servo_node · rpi_hardware_pwm</text>
+<text class="sub" x="143" y="184">пересчитывает угол в duty cycle</text>
+
+<line x1="143" y1="192" x2="143" y2="208" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="b" x="20" y="212" width="245" height="40" rx="6"/>
+<text class="c" x="143" y="230">аппаратный PWM · 50 Гц</text>
+<text class="sub" x="143" y="244">GPIO12 (канал 0) или GPIO13 (канал 1)</text>
+
+<line x1="143" y1="252" x2="143" y2="268" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="g" x="20" y="272" width="245" height="40" rx="6"/>
+<text class="cg" x="143" y="290">сервопривод</text>
+<text class="sub" x="143" y="304">поворачивается на заданный угол 0–180°</text>
+
+<!-- МАГНИТ -->
+<rect class="b" x="315" y="32" width="245" height="40" rx="6"/>
+<text class="c" x="437" y="50">drone.gpio.magnet_on(23)</text>
+<text class="sub" x="437" y="64">устанавливает пин GPIO 23 в HIGH</text>
+
+<line x1="437" y1="72" x2="437" y2="88" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="b" x="315" y="92" width="245" height="40" rx="6"/>
+<text class="c" x="437" y="110">/dev/gpiochip0 · libgpiod</text>
+<text class="sub" x="437" y="124">Linux GPIO драйвер · set_value(1)</text>
+
+<line x1="437" y1="132" x2="437" y2="148" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="b" x="315" y="152" width="245" height="40" rx="6"/>
+<text class="c" x="437" y="170">GPIO 23 · HIGH</text>
+<text class="sub" x="437" y="184">3.3 В на пине — управляющий сигнал</text>
+
+<line x1="437" y1="192" x2="437" y2="208" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="b" x="315" y="212" width="245" height="40" rx="6"/>
+<text class="c" x="437" y="230">транзисторный ключ</text>
+<text class="sub" x="437" y="244">открывается и пропускает ток к магниту</text>
+
+<line x1="437" y1="252" x2="437" y2="268" stroke="#9ca3af" stroke-width="1.5"/>
+
+<rect class="g" x="315" y="272" width="245" height="40" rx="6"/>
+<text class="cg" x="437" y="290">электромагнит</text>
+<text class="sub" x="437" y="304">притягивает груз</text>
+</svg>

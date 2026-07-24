@@ -1,0 +1,25 @@
+<svg viewBox="0 0 280 220" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Система координат map (ENU)</title>
+<desc>Система координат map: X на восток, Y на север, Z вверх. Начало координат фиксировано в точке старта.</desc>
+<style>
+.d{font-size:10.5px;fill:#6b7280}
+.ax{font-size:13px;font-weight:700;fill:#111827}
+</style>
+<!-- Y north -->
+<line x1="50" y1="180" x2="50" y2="30" stroke="#374151" stroke-width="2"/>
+<text class="ax" x="58" y="28">Y</text>
+<text class="d"  x="58" y="44">север</text>
+<!-- X east -->
+<line x1="50" y1="180" x2="240" y2="180" stroke="#374151" stroke-width="2"/>
+<text class="ax" x="244" y="184">X</text>
+<text class="d"  x="210" y="198">восток</text>
+<!-- origin -->
+<circle cx="50" cy="180" r="4" fill="#374151"/>
+<text class="d" x="18" y="200">старт</text>
+<!-- drone -->
+<circle cx="150" cy="90" r="9" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text class="d" x="164" y="86">дрон</text>
+<text class="d" x="164" y="100">сейчас</text>
+<!-- Z -->
+<text class="d" x="140" y="170" fill="#9ca3af">Z — вверх</text>
+</svg>

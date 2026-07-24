@@ -1,0 +1,17 @@
+<svg viewBox="0 0 420 360" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Канал управления RadioMaster</title>
+<desc>Пульт RadioMaster Pocket передаёт команды по радиоканалу ELRS на приёмник Обрика, который связан с полётным контроллером PX4.</desc>
+<g text-anchor="middle">
+<rect x="60" y="20" width="300" height="56" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="210" y="44" font-size="13.5" font-weight="600" fill="#111827">RadioMaster Pocket</text>
+<text x="210" y="63" font-size="11.5" fill="#6b7280">пульт (TX — передатчик)</text>
+<line x1="210" y1="76" x2="210" y2="116" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="210" y="103" font-size="11.5" font-weight="600" fill="#111827">радиосигнал ELRS</text>
+<rect x="60" y="116" width="300" height="56" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="210" y="140" font-size="13.5" font-weight="600" fill="#111827">Приёмник на Обрике</text>
+<text x="210" y="159" font-size="11.5" fill="#6b7280">RX — приёмник</text>
+<line x1="210" y1="172" x2="210" y2="212" stroke="#9ca3af" stroke-width="1.5"/>
+<rect x="60" y="212" width="300" height="56" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="210" y="244" font-size="13.5" font-weight="600" fill="#111827">Полётный контроллер PX4</text>
+</g>
+</svg>

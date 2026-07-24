@@ -1,0 +1,32 @@
+<svg viewBox="0 0 460 320" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Цепочка управления моторами</title>
+<desc>Гироскоп и акселерометр передают данные в PX4, который управляет ESC, которые в свою очередь управляют моторами.</desc>
+<style>.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}.t{font-size:13px;font-weight:600;fill:#111827}.d{font-size:11px;fill:#6b7280}</style>
+<g text-anchor="middle">
+<rect class="b" x="80" y="14" width="300" height="44" rx="9"/>
+<text class="t" x="230" y="33">Гироскоп + акселерометр</text>
+<text class="d" x="230" y="50">сотни измерений в секунду</text>
+<line x1="230" y1="58" x2="230" y2="78" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="80" y="78" width="300" height="54" rx="9"/>
+<text class="t" x="230" y="100">PX4</text>
+<text class="d" x="230" y="117">вычисляет, какой мотор ускорить</text>
+<text class="d" x="230" y="131">или замедлить</text>
+<!-- fan out lines -->
+<line x1="230" y1="132" x2="230" y2="155" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="230" y1="155" x2="105" y2="155" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="230" y1="155" x2="355" y2="155" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="105" y1="155" x2="105" y2="175" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="230" y1="155" x2="230" y2="175" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="355" y1="155" x2="355" y2="175" stroke="#9ca3af" stroke-width="1.5"/>
+<!-- ESC 1..4 label -->
+<rect class="b" x="35" y="175" width="140" height="40" rx="9"/>
+<text class="t" x="105" y="200">ESC 1..4</text>
+<!-- note -->
+<rect class="b" x="195" y="175" width="240" height="40" rx="9"/>
+<text class="d" x="315" y="192">регуляторы скорости —</text>
+<text class="d" x="315" y="208">между PX4 и каждым мотором</text>
+<line x1="105" y1="215" x2="105" y2="235" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="35" y="235" width="140" height="40" rx="9"/>
+<text class="t" x="105" y="260">Моторы 1..4</text>
+</g>
+</svg>

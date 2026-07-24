@@ -1,0 +1,31 @@
+<svg viewBox="0 0 500 280" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Вычисление позиции по ArUco-маркерам</title>
+<desc>Камера видит маркеры на полу и вычисляет позицию дрона X, Y.</desc>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.t{font-size:13px;font-weight:600;fill:#111827}
+.d{font-size:11px;fill:#6b7280}
+.m{font-size:12px;font-weight:600;fill:#374151}
+</style>
+<g text-anchor="middle">
+<rect class="b" x="20" y="16" width="120" height="40" rx="9"/>
+<text class="m" x="80" y="41">Метка 0</text>
+<rect class="b" x="190" y="16" width="120" height="40" rx="9"/>
+<text class="m" x="250" y="41">Метка 1</text>
+<rect class="b" x="360" y="16" width="120" height="40" rx="9"/>
+<text class="m" x="420" y="41">Метка 2</text>
+<line x1="80"  y1="56" x2="80"  y2="86" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="250" y1="56" x2="250" y2="86" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="420" y1="56" x2="420" y2="86" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="80"  y1="86" x2="420" y2="86" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="250" y1="86" x2="250" y2="106" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="145" y="106" width="210" height="40" rx="9"/>
+<text class="t" x="250" y="131">Камера дрона</text>
+<line x1="250" y1="146" x2="250" y2="166" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="90" y="166" width="320" height="68" rx="9"/>
+<text class="t"  x="250" y="190">Вычисление позиции</text>
+<text class="d" x="250" y="210">aruco_loc_node: RANSAC + solvePnP</text>
+<text class="d" x="250" y="226">→ координаты X, Y дрона</text>
+</g>
+</svg>

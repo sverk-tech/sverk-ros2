@@ -1,0 +1,45 @@
+<svg viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Сервисы через rosserial_ros2: Arduino как сервер и как клиент</title>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.t{font-size:10px;fill:#111827;text-anchor:middle}
+.hd{font-size:11px;font-weight:700;fill:#374151}
+.ln{stroke:#9ca3af;stroke-width:1.5;fill:none}
+</style>
+
+<text class="hd" x="20" y="20">Arduino как сервер — отвечает на запросы</text>
+<rect class="b" x="20" y="30" width="110" height="40" rx="8"/>
+<text class="t" x="75" y="54">ROS 2 клиент</text>
+<line x1="130" y1="50" x2="140" y2="50" class="ln"/>
+<rect class="a" x="140" y="30" width="110" height="40" rx="8"/>
+<text class="t" x="195" y="54">bridge</text>
+<line x1="250" y1="50" x2="260" y2="50" class="ln"/>
+<rect class="b" x="260" y="30" width="110" height="40" rx="8"/>
+<text class="t" x="315" y="48">Arduino</text>
+<text class="t" x="315" y="62">обработчик</text>
+<line x1="370" y1="50" x2="380" y2="50" class="ln"/>
+<rect class="a" x="380" y="30" width="110" height="40" rx="8"/>
+<text class="t" x="435" y="54">bridge</text>
+<line x1="490" y1="50" x2="500" y2="50" class="ln"/>
+<rect class="g" x="500" y="30" width="110" height="40" rx="8"/>
+<text class="t" x="555" y="54">ROS 2 ответ</text>
+
+<text class="hd" x="20" y="120">Arduino как клиент — сам вызывает сервисы</text>
+<rect class="b" x="20" y="130" width="110" height="40" rx="8"/>
+<text class="t" x="75" y="154">Arduino</text>
+<line x1="130" y1="150" x2="140" y2="150" class="ln"/>
+<rect class="a" x="140" y="130" width="110" height="40" rx="8"/>
+<text class="t" x="195" y="154">bridge</text>
+<line x1="250" y1="150" x2="260" y2="150" class="ln"/>
+<rect class="b" x="260" y="130" width="110" height="40" rx="8"/>
+<text class="t" x="315" y="154">ROS 2 сервер</text>
+<line x1="370" y1="150" x2="380" y2="150" class="ln"/>
+<rect class="a" x="380" y="130" width="110" height="40" rx="8"/>
+<text class="t" x="435" y="154">bridge</text>
+<line x1="490" y1="150" x2="500" y2="150" class="ln"/>
+<rect class="g" x="500" y="130" width="110" height="40" rx="8"/>
+<text class="t" x="555" y="148">Arduino</text>
+<text class="t" x="555" y="162">получает ответ</text>
+</svg>

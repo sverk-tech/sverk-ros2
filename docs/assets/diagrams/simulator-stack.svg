@@ -1,0 +1,18 @@
+<svg viewBox="0 0 460 470" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Как устроен локальный симулятор</title>
+<desc>Программа на Python через sverk_interfaces и offboard_control управляет симулированным PX4 SITL в Gazebo.</desc>
+<style>.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}.t{font-size:13px;font-weight:600;fill:#111827}.d{font-size:11px;fill:#6b7280}.c{font-family:ui-monospace,Menlo,monospace;font-size:12px;fill:#374151}</style>
+<g text-anchor="middle">
+<rect class="a" x="90" y="14" width="280" height="40" rx="9"/><text class="t" x="230" y="39">Программа на Python</text>
+<line x1="230" y1="54" x2="230" y2="74" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="90" y="74" width="280" height="40" rx="9"/><text class="c" x="230" y="99">sverk_interfaces</text>
+<line x1="230" y1="114" x2="230" y2="134" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="90" y="134" width="280" height="40" rx="9"/><text class="c" x="230" y="159">offboard_control</text>
+<line x1="230" y1="174" x2="230" y2="194" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="90" y="194" width="280" height="46" rx="9"/><text class="c" x="230" y="216">MicroXRCEAgent</text><text class="d" x="230" y="232">мост ROS 2 ↔ uXRCE-DDS</text>
+<line x1="230" y1="240" x2="230" y2="260" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="90" y="260" width="280" height="46" rx="9"/><text class="t" x="230" y="282">PX4 SITL</text><text class="d" x="230" y="298">симулированный контроллер</text>
+<line x1="230" y1="306" x2="230" y2="326" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="90" y="326" width="280" height="56" rx="9"/><text class="t" x="230" y="350">Gazebo Harmonic</text><text class="d" x="230" y="368">физика, 3D, виртуальная камера</text>
+</g>
+</svg>

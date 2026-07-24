@@ -1,0 +1,36 @@
+<svg viewBox="0 0 660 330" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Интерфейсы бортового компьютера</title>
+<desc>Бортовой компьютер подключает периферию через GPIO, I2C, SPI, UART и USB.</desc>
+<rect x="24" y="120" width="170" height="80" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="109" y="156" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">Бортовой</text>
+<text x="109" y="176" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">компьютер</text>
+<g font-size="12.5" fill="#111827">
+<!-- rows -->
+<line x1="194" y1="44"  x2="360" y2="44"  stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="360" y1="160" x2="360" y2="44"  stroke="#9ca3af" stroke-width="1.5"/>
+<text x="262" y="38" text-anchor="middle" font-weight="600">GPIO</text>
+<rect x="360" y="26" width="276" height="40" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="372" y="51" font-size="12">Сервоприводы (PWM), электромагнит</text>
+
+<line x1="194" y1="92"  x2="360" y2="92"  stroke="#9ca3af" stroke-width="1.5"/>
+<text x="262" y="86" text-anchor="middle" font-weight="600">I2C</text>
+<rect x="360" y="74" width="276" height="36" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="372" y="97" font-size="12">Лазерный дальномер VL53L1X</text>
+
+<line x1="194" y1="140" x2="360" y2="140" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="262" y="134" text-anchor="middle" font-weight="600">SPI</text>
+<rect x="360" y="122" width="276" height="36" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="372" y="145" font-size="12">LED-лента WS2812B</text>
+
+<line x1="194" y1="188" x2="360" y2="188" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="360" y1="160" x2="360" y2="284" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="262" y="182" text-anchor="middle" font-weight="600">UART</text>
+<rect x="360" y="170" width="276" height="36" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="372" y="193" font-size="12">Arduino (serial_bridge), лидар LD19</text>
+
+<line x1="194" y1="236" x2="360" y2="236" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="262" y="230" text-anchor="middle" font-weight="600">USB</text>
+<rect x="360" y="218" width="276" height="36" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="372" y="241" font-size="12">Arduino (rosserial), лидар LD19</text>
+</g>
+</svg>

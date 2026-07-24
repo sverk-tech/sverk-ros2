@@ -1,0 +1,17 @@
+<svg viewBox="0 0 520 180" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Подключение сервопривода</title>
+<desc>Сервопривод подключается к бортовому компьютеру: сигнал на GPIO12, питание на 5В, земля на GND.</desc>
+<text x="120" y="28" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Сервопривод</text>
+<text x="400" y="28" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Бортовой компьютер</text>
+<g font-size="12.5" fill="#111827">
+<text x="120" y="68" text-anchor="middle">сигнал (жёлтый)</text>
+<line x1="200" y1="64" x2="320" y2="64" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="400" y="68" text-anchor="middle" font-weight="600">GPIO12 (пин 32)</text>
+<text x="120" y="108" text-anchor="middle">питание (красный)</text>
+<line x1="200" y1="104" x2="320" y2="104" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="400" y="108" text-anchor="middle" font-weight="600">5 В</text>
+<text x="120" y="148" text-anchor="middle">земля (коричневый)</text>
+<line x1="200" y1="144" x2="320" y2="144" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="400" y="148" text-anchor="middle" font-weight="600">GND</text>
+</g>
+</svg>

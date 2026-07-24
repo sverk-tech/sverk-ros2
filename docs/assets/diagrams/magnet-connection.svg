@@ -1,0 +1,23 @@
+<svg viewBox="0 0 440 300" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Подключение электромагнита</title>
+<desc>Сигнал GPIO управляет транзисторным ключом, который коммутирует питание электромагнита; земля общая с Обриком.</desc>
+<g>
+<rect x="70" y="20" width="300" height="50" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="220" y="41" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">GPIO бортового компьютера</text>
+<text x="220" y="59" text-anchor="middle" font-size="11.5" fill="#6b7280">3.3 В, управляющий сигнал</text>
+</g>
+<line x1="220" y1="70" x2="220" y2="104" stroke="#9ca3af" stroke-width="1.5"/>
+<g>
+<rect x="70" y="104" width="300" height="50" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="220" y="125" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Транзисторный ключ</text>
+<text x="220" y="143" text-anchor="middle" font-size="11.5" fill="#6b7280">MOSFET или модуль реле</text>
+</g>
+<line x1="220" y1="154" x2="220" y2="188" stroke="#9ca3af" stroke-width="1.5"/>
+<g>
+<rect x="70" y="188" width="300" height="50" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="220" y="209" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Электромагнит</text>
+<text x="220" y="227" text-anchor="middle" font-size="11.5" fill="#6b7280">5 В или 12 В от внешнего питания</text>
+</g>
+<line x1="220" y1="238" x2="220" y2="262" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="220" y="280" text-anchor="middle" font-size="12.5" font-weight="600" fill="#111827">GND — общая земля с Обриком</text>
+</svg>

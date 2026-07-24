@@ -1,0 +1,23 @@
+<svg viewBox="0 0 520 350" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Автозапуск системы Обрика</title>
+<desc>При включении платы systemd поднимает Docker, контейнер выполняет start.sh, который запускает основной launch-файл со всеми нодами.</desc>
+<g font-size="12.5">
+<rect x="60" y="16" width="400" height="44" rx="9" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="260" y="43" text-anchor="middle" font-weight="600" fill="#111827">Включение платы</text>
+<line x1="260" y1="60" x2="260" y2="84" stroke="#9ca3af" stroke-width="1.5"/>
+<rect x="60" y="84" width="400" height="48" rx="9" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="260" y="105" text-anchor="middle" font-weight="600" fill="#111827">systemd на хосте поднимает Docker</text>
+<text x="260" y="122" text-anchor="middle" fill="#6b7280">сервис sverk-ros2-docker</text>
+<line x1="260" y1="132" x2="260" y2="156" stroke="#9ca3af" stroke-width="1.5"/>
+<rect x="60" y="156" width="400" height="48" rx="9" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="260" y="177" text-anchor="middle" font-weight="600" fill="#111827">Контейнер sverk_ros2</text>
+<text x="260" y="194" text-anchor="middle" fill="#6b7280">выполняет scripts/start.sh</text>
+<line x1="260" y1="204" x2="260" y2="228" stroke="#9ca3af" stroke-width="1.5"/>
+<rect x="60" y="228" width="400" height="48" rx="9" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="260" y="249" text-anchor="middle" font-weight="600" fill="#111827">ros2 launch</text>
+<text x="260" y="266" text-anchor="middle" fill="#6b7280">full_system_real.launch.py</text>
+<line x1="260" y1="276" x2="260" y2="300" stroke="#9ca3af" stroke-width="1.5"/>
+<rect x="60" y="300" width="400" height="44" rx="9" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="260" y="327" text-anchor="middle" font-weight="600" fill="#111827">Все основные ноды Обрика</text>
+</g>
+</svg>

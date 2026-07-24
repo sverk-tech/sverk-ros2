@@ -1,0 +1,20 @@
+<svg viewBox="0 0 640 190" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Способы подключения лидара LD19</title>
+<desc>Лидар LD19 подключается к бортовому компьютеру через USB-UART адаптер или напрямую к пинам UART.</desc>
+<rect x="20" y="62" width="150" height="66" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="95" y="92" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Бортовой</text>
+<text x="95" y="110" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">компьютер</text>
+<!-- USB path -->
+<line x1="170" y1="80" x2="300" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="235" y="74" text-anchor="middle" font-size="11.5" fill="#111827">USB</text>
+<rect x="300" y="58" width="150" height="44" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="375" y="84" text-anchor="middle" font-size="12" fill="#111827">USB-UART адаптер</text>
+<line x1="450" y1="80" x2="540" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+<rect x="540" y="58" width="80" height="44" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="580" y="84" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">LD19</text>
+<!-- UART path -->
+<line x1="170" y1="110" x2="540" y2="130" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="320" y="135" text-anchor="middle" font-size="11.5" fill="#6b7280">UART напрямую — GPIO9, пин 21 (TX провод)</text>
+<rect x="540" y="118" width="80" height="44" rx="8" fill="#f3f4f6" stroke="#d1d5db"/>
+<text x="580" y="144" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">LD19</text>
+</svg>

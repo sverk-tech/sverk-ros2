@@ -1,0 +1,21 @@
+<svg viewBox="0 0 440 290" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Режим Position</title>
+<desc>Камера снизу видит метки на полу, PX4 вычисляет позицию и удерживает дрон на месте.</desc>
+<g>
+<rect x="70" y="24" width="300" height="56" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="220" y="48" text-anchor="middle" font-size="13.5" font-weight="600" fill="#111827">Камера снизу</text>
+<text x="220" y="67" text-anchor="middle" font-size="12" fill="#6b7280">видит метки ArUco на полу</text>
+</g>
+<line x1="220" y1="80" x2="220" y2="116" stroke="#9ca3af" stroke-width="1.5"/>
+<g>
+<rect x="70" y="116" width="300" height="56" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="220" y="140" text-anchor="middle" font-size="13.5" font-weight="600" fill="#111827">Позиция X, Y и высота Z</text>
+<text x="220" y="159" text-anchor="middle" font-size="12" fill="#6b7280">PX4 вычисляет положение</text>
+</g>
+<line x1="220" y1="172" x2="220" y2="208" stroke="#9ca3af" stroke-width="1.5"/>
+<g>
+<rect x="70" y="208" width="300" height="56" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="220" y="232" text-anchor="middle" font-size="13.5" font-weight="600" fill="#111827">PX4 корректирует моторы</text>
+<text x="220" y="251" text-anchor="middle" font-size="12" fill="#6b7280">дрон висит на месте</text>
+</g>
+</svg>

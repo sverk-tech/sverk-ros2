@@ -1,0 +1,36 @@
+<svg viewBox="0 0 560 340" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Слои: от вашего кода до железа</title>
+<style>
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.t{font-size:12.5px;font-weight:600;fill:#111827;text-anchor:middle}
+.lbl{font-size:10px;fill:#6b7280;text-anchor:middle}
+.cl{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;fill:#374151;text-anchor:middle}
+.ln{stroke:#9ca3af;stroke-width:1.5;fill:none}
+</style>
+
+<rect class="a" x="60" y="16" width="440" height="40" rx="8"/>
+<text class="t" x="280" y="34">Код программы</text>
+<text class="lbl" x="280" y="49">drone.control.navigate(...), drone.gpio.pin_on(17)</text>
+<line x1="280" y1="56" x2="280" y2="76" class="ln"/>
+
+<rect class="b" x="60" y="76" width="440" height="40" rx="8"/>
+<text class="t" x="280" y="94">sverk_interfaces</text>
+<text class="cl" x="280" y="109">скрывает rclpy, gpiod, /dev/*</text>
+<line x1="280" y1="116" x2="280" y2="136" class="ln"/>
+
+<rect class="b" x="60" y="136" width="440" height="40" rx="8"/>
+<text class="t" x="280" y="154">ROS 2 (rclpy)</text>
+<text class="lbl" x="280" y="169">ноды, топики, сервисы</text>
+<line x1="280" y1="176" x2="280" y2="196" class="ln"/>
+
+<rect class="b" x="60" y="196" width="440" height="40" rx="8"/>
+<text class="t" x="280" y="214">Ядро Linux</text>
+<text class="cl" x="280" y="229">/dev/gpiochip0, /dev/ttyS2, /dev/video*, /dev/spidev*</text>
+<line x1="280" y1="236" x2="280" y2="256" class="ln"/>
+
+<rect class="g" x="60" y="256" width="440" height="40" rx="8"/>
+<text class="t" x="280" y="274">Железо</text>
+<text class="lbl" x="280" y="289">GPIO-пины, UART, камера, SPI-шина</text>
+</svg>

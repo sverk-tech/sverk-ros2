@@ -1,0 +1,19 @@
+<svg viewBox="0 0 620 250" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Связь Arduino с ROS 2 через rosserial</title>
+<desc>Скетч Arduino с библиотекой ros_lib соединяется по USB или UART с мостом rosserial_ros2_bridge, который включает Arduino в граф ROS 2.</desc>
+<style>.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}.t{font-size:13px;font-weight:600;fill:#111827}.d{font-size:11px;fill:#6b7280}</style>
+<rect class="a" x="20" y="40" width="220" height="120" rx="10"/>
+<text class="t" x="130" y="66" text-anchor="middle">Arduino (скетч)</text>
+<text class="d" x="130" y="92" text-anchor="middle">библиотека ros_lib</text>
+<text class="d" x="130" y="112" text-anchor="middle">публикует и слушает топики</text>
+<text class="d" x="130" y="132" text-anchor="middle">вызывает сервисы</text>
+<line x1="240" y1="100" x2="380" y2="100" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="310" y="92" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">USB / UART</text>
+<rect class="b" x="380" y="74" width="220" height="52" rx="10"/>
+<text class="t" x="490" y="98" text-anchor="middle" font-size="12.5">bridge-нода</text>
+<text class="d" x="490" y="115" text-anchor="middle">rosserial_ros2_bridge</text>
+<line x1="490" y1="126" x2="490" y2="166" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="360" y="166" width="260" height="48" rx="10"/>
+<text class="t" x="490" y="188" text-anchor="middle" font-size="12.5">Граф ROS 2</text>
+<text class="d" x="490" y="205" text-anchor="middle">обычные топики и сервисы</text>
+</svg>

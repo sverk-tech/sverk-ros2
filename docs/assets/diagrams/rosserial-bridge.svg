@@ -1,0 +1,31 @@
+<svg viewBox="0 0 620 160" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>rosserial_ros2_bridge: Arduino → Обрик</title>
+<desc>Arduino с библиотекой ros_lib публикует ROS-сообщения через rosserial_ros2_bridge в граф ROS 2.</desc>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.t{font-size:12px;font-weight:600;fill:#111827}
+.d{font-size:10.5px;fill:#6b7280}
+.c{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#374151}
+</style>
+<g text-anchor="middle">
+<rect class="b" x="10" y="30" width="155" height="90" rx="9"/>
+<text class="t" x="87" y="52">Arduino + ros_lib</text>
+<text class="c" x="87" y="70">ros::Publisher pub</text>
+<text class="c" x="87" y="84">nh.publish(msg)</text>
+<text class="d" x="87" y="104">бинарный протокол</text>
+<text class="d" x="232" y="48">USB / UART</text>
+<line x1="165" y1="75" x2="300" y2="75" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="300" y="30" width="155" height="90" rx="9"/>
+<text class="t" x="377" y="52">rosserial_ros2</text>
+<text class="t" x="377" y="66">_bridge</text>
+<text class="d" x="377" y="84">декодирует</text>
+<text class="d" x="377" y="98">ROS-сообщения</text>
+<line x1="455" y1="75" x2="478" y2="75" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="478" y="30" width="132" height="90" rx="9"/>
+<text class="t" x="544" y="52">ROS 2 топик</text>
+<text class="c" x="544" y="72">/temperature</text>
+<text class="d" x="544" y="90">Float32</text>
+<text class="d" x="544" y="108">любой ROS 2 тип</text>
+</g>
+</svg>

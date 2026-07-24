@@ -1,0 +1,39 @@
+<svg viewBox="0 0 640 416" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Три уровня Compose-файлов</title>
+<desc>Базовый docker-compose.yml плюс один платформенный файл плюс опциональные overlay-файлы.</desc>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.fn{font-family:ui-monospace,Menlo,monospace;font-size:11px;fill:#111827}
+.lbl{font-size:10.5px;fill:#6b7280;text-anchor:end}
+.hd{font-size:11px;font-weight:700;fill:#374151}
+.plus{font-size:20px;font-weight:700;fill:#9ca3af;text-anchor:middle}
+</style>
+
+<!-- Level 1 -->
+<rect class="b" x="60" y="18" width="520" height="48" rx="9"/>
+<text class="fn" x="80" y="40">docker-compose.yml</text>
+<text class="lbl" x="560" y="40">база · всегда</text>
+
+<text class="plus" x="320" y="90">+</text>
+
+<!-- Level 2 -->
+<rect class="a" x="60" y="100" width="520" height="158" rx="9"/>
+<text class="hd" x="80" y="122">Платформа — выбрать одну под свою плату</text>
+<text class="fn" x="80" y="148">docker-compose.rpi.yml</text><text class="lbl" x="560" y="148">RPi CM5</text>
+<text class="fn" x="80" y="170">docker-compose.radxa.yml</text><text class="lbl" x="560" y="170">Radxa CM5</text>
+<text class="fn" x="80" y="192">docker-compose.orange.yml</text><text class="lbl" x="560" y="192">Orange Pi 5 Pro</text>
+<text class="fn" x="80" y="214">docker-compose.rdkx3.yml</text><text class="lbl" x="560" y="214">RDK X3</text>
+<text class="fn" x="80" y="236">docker-compose.orangepi-zero3w.yml</text><text class="lbl" x="560" y="236">Orange Pi Zero 3W</text>
+
+<text class="plus" x="320" y="282">+</text>
+
+<!-- Level 3 -->
+<rect class="g" x="60" y="292" width="520" height="100" rx="9"/>
+<text class="hd" x="80" y="314">Опционально — по необходимости</text>
+<text class="fn" x="80" y="340">docker-compose.web.yml</text><text class="lbl" x="560" y="340">веб-интерфейс</text>
+<text class="fn" x="80" y="362">docker-compose.2d_lidar.yml</text><text class="lbl" x="560" y="362">лидар</text>
+
+<text x="320" y="408" text-anchor="middle" font-size="10" fill="#9ca3af">платформенные и опциональные файлы лежат в scripts/docker/</text>
+</svg>

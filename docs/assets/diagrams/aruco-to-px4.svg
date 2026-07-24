@@ -1,0 +1,43 @@
+<svg viewBox="0 0 480 510" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Как изображение превращается в позицию дрона</title>
+<desc>Цепочка: камера → /camera_1/image_raw → aruco_det_loc → /aruco/det/markers → aruco_map → /aruco/loc/pose_cov → px4_local_pose_publisher → PX4 EKF2.</desc>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#bbf7d0;stroke-width:1.5}
+.t{font-size:12px;font-weight:600;fill:#111827}
+.d{font-size:10.5px;fill:#6b7280}
+.c{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#374151}
+</style>
+<g text-anchor="middle">
+<rect class="b" x="110" y="10" width="260" height="44" rx="9"/>
+<text class="t" x="240" y="30">Камера (MIPI CSI)</text>
+<text class="d" x="240" y="46">аппаратный интерфейс</text>
+<line x1="240" y1="54" x2="240" y2="72" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="g" x="110" y="72" width="260" height="34" rx="9"/>
+<text class="c" x="240" y="94">/camera_1/image_raw</text>
+<line x1="240" y1="106" x2="240" y2="124" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="80" y="124" width="320" height="50" rx="9"/>
+<text class="t" x="240" y="145">aruco_det_loc</text>
+<text class="d" x="240" y="162">находит маркеры, вычисляет их позу относительно камеры</text>
+<line x1="240" y1="174" x2="240" y2="192" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="g" x="110" y="192" width="260" height="34" rx="9"/>
+<text class="c" x="240" y="214">/aruco/det/markers</text>
+<line x1="240" y1="226" x2="240" y2="244" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="80" y="244" width="320" height="50" rx="9"/>
+<text class="t" x="240" y="265">aruco_map</text>
+<text class="d" x="240" y="282">сопоставляет маркеры с картой, вычисляет позицию дрона</text>
+<line x1="240" y1="294" x2="240" y2="312" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="g" x="80" y="312" width="320" height="34" rx="9"/>
+<text class="c" x="240" y="334">/aruco/loc/pose_cov</text>
+<line x1="240" y1="346" x2="240" y2="364" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="a" x="80" y="364" width="320" height="50" rx="9"/>
+<text class="t" x="240" y="385">px4_local_pose_publisher</text>
+<text class="d" x="240" y="402">передаёт позицию в PX4 через uXRCE-DDS</text>
+<line x1="240" y1="414" x2="240" y2="432" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="110" y="432" width="260" height="64" rx="9"/>
+<text class="t" x="240" y="455">PX4 EKF2</text>
+<text class="d" x="240" y="472">объединяет визуальную позицию с IMU</text>
+<text class="d" x="240" y="488">→ используется для навигации</text>
+</g>
+</svg>

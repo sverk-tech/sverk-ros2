@@ -1,0 +1,40 @@
+<svg viewBox="0 0 460 470" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Запуск контейнера при включении платы</title>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.t{font-size:12px;font-weight:600;fill:#111827;text-anchor:middle}
+.cs{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#374151;text-anchor:middle}
+.lbl{font-size:10px;fill:#6b7280;text-anchor:middle}
+.ln{stroke:#9ca3af;stroke-width:1.5;fill:none}
+</style>
+
+<rect class="b" x="110" y="20" width="240" height="36" rx="8"/>
+<text class="t" x="230" y="42">Плата включается</text>
+<line x1="230" y1="56" x2="230" y2="78" class="ln"/>
+
+<rect class="b" x="110" y="78" width="240" height="36" rx="8"/>
+<text class="t" x="230" y="100">Загружается ОС (Debian / Ubuntu)</text>
+<line x1="230" y1="114" x2="230" y2="136" class="ln"/>
+
+<rect class="b" x="110" y="136" width="240" height="36" rx="8"/>
+<text class="t" x="230" y="158">systemd запускает сервисы</text>
+<line x1="230" y1="172" x2="230" y2="194" class="ln"/>
+
+<rect class="a" x="60" y="194" width="340" height="58" rx="8"/>
+<text class="t" x="230" y="214">sverk-ros2-docker-&lt;плата&gt;.service</text>
+<text class="cs" x="230" y="233">docker compose -f docker-compose.yml \</text>
+<text class="cs" x="230" y="246">-f docker-compose.&lt;плата&gt;.yml up -d</text>
+<line x1="230" y1="252" x2="230" y2="274" class="ln"/>
+
+<rect class="a" x="110" y="274" width="240" height="36" rx="8"/>
+<text class="t" x="230" y="296">Контейнер sverk_ros2 запущен</text>
+<line x1="230" y1="310" x2="230" y2="332" class="ln"/>
+
+<rect class="g" x="110" y="332" width="240" height="36" rx="8"/>
+<text class="t" x="230" y="354">ROS 2 ноды дрона работают</text>
+
+<text class="lbl" x="230" y="396">после включения питания дрон готов к работе сам —</text>
+<text class="lbl" x="230" y="410">вручную docker compose up вводить не нужно</text>
+</svg>

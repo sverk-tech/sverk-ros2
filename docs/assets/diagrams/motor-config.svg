@@ -1,0 +1,28 @@
+<svg viewBox="0 0 460 440" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>X-конфигурация моторов квадрокоптера</title>
+<desc>Моторы M1 и M4 вращаются против часовой стрелки, M2 и M3 — по часовой. Противоположные моторы вращаются в одну сторону, соседние — в разные.</desc>
+<!-- diagonals -->
+<line x1="230" y1="220" x2="95" y2="95" stroke="#9ca3af" stroke-width="2"/>
+<line x1="230" y1="220" x2="365" y2="95" stroke="#9ca3af" stroke-width="2"/>
+<line x1="230" y1="220" x2="95" y2="345" stroke="#9ca3af" stroke-width="2"/>
+<line x1="230" y1="220" x2="365" y2="345" stroke="#9ca3af" stroke-width="2"/>
+<!-- center -->
+<rect x="180" y="185" width="100" height="70" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="230" y="225" text-anchor="middle" font-size="14" font-weight="600" fill="#111827">Обрик</text>
+<!-- motors -->
+<g text-anchor="middle">
+<circle cx="95" cy="95" r="40" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="95" y="90" font-size="14" font-weight="600" fill="#111827">M1</text>
+<text x="95" y="110" font-size="12" fill="#6b7280">↺ против</text>
+<circle cx="365" cy="95" r="40" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="365" y="90" font-size="14" font-weight="600" fill="#111827">M2</text>
+<text x="365" y="110" font-size="12" fill="#6b7280">↻ по часовой</text>
+<circle cx="95" cy="345" r="40" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="95" y="340" font-size="14" font-weight="600" fill="#111827">M3</text>
+<text x="95" y="360" font-size="12" fill="#6b7280">↻ по часовой</text>
+<circle cx="365" cy="345" r="40" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="365" y="340" font-size="14" font-weight="600" fill="#111827">M4</text>
+<text x="365" y="360" font-size="12" fill="#6b7280">↺ против</text>
+</g>
+<text x="230" y="420" text-anchor="middle" font-size="11.5" fill="#6b7280">Противоположные моторы вращаются в одну сторону, соседние — в разные</text>
+</svg>

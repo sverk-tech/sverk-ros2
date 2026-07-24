@@ -1,0 +1,49 @@
+<svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Наследование Docker-образов Обрика</title>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.c{font-family:ui-monospace,Menlo,monospace;font-size:11px;fill:#111827;text-anchor:middle}
+.cs{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;fill:#374151;text-anchor:middle}
+.lbl{font-size:10px;fill:#6b7280;text-anchor:middle}
+.ln{stroke:#9ca3af;stroke-width:1.5;fill:none}
+</style>
+
+<rect class="b" x="180" y="20" width="280" height="40" rx="8"/>
+<text class="c" x="320" y="38">ros:humble-ros-base</text>
+<text class="lbl" x="320" y="53">официальный образ ROS 2 от OSRF</text>
+
+<line x1="320" y1="60" x2="320" y2="90" class="ln"/>
+
+<rect class="a" x="180" y="90" width="280" height="40" rx="8"/>
+<text class="c" x="320" y="108">sverk/ros2-base:latest</text>
+<text class="lbl" x="320" y="123">базовый образ Обрика · Dockerfile.base</text>
+
+<line x1="320" y1="130" x2="320" y2="155" class="ln"/>
+<line x1="73" y1="155" x2="577" y2="155" class="ln"/>
+<line x1="73" y1="155" x2="73" y2="175" class="ln"/>
+<line x1="199" y1="155" x2="199" y2="175" class="ln"/>
+<line x1="325" y1="155" x2="325" y2="175" class="ln"/>
+<line x1="451" y1="155" x2="451" y2="175" class="ln"/>
+<line x1="577" y1="155" x2="577" y2="175" class="ln"/>
+
+<rect class="b" x="14" y="175" width="118" height="34" rx="7"/>
+<text class="cs" x="73" y="196">:rpi</text>
+<rect class="b" x="140" y="175" width="118" height="34" rx="7"/>
+<text class="cs" x="199" y="196">:radxa</text>
+<rect class="b" x="266" y="175" width="118" height="34" rx="7"/>
+<text class="cs" x="325" y="196">:orange</text>
+<rect class="b" x="392" y="175" width="118" height="34" rx="7"/>
+<text class="cs" x="451" y="196">:rdk</text>
+<rect class="b" x="518" y="175" width="118" height="34" rx="7"/>
+<text class="cs" x="577" y="196">:orangepi-zero3w</text>
+
+<text class="lbl" x="320" y="232">пять платформенных образов sverk/ros2</text>
+
+<line x1="320" y1="244" x2="320" y2="270" class="ln"/>
+
+<rect class="g" x="170" y="270" width="300" height="40" rx="8"/>
+<text class="cs" x="320" y="288">+ docker-compose.2d_lidar.yml</text>
+<text class="lbl" x="320" y="303">addon для лидара (подключается поверх)</text>
+</svg>

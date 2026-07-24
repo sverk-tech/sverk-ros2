@@ -1,0 +1,39 @@
+<svg viewBox="0 0 520 400" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Что происходит при вызове navigate()</title>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.g{fill:#f0fdf4;stroke:#86efac;stroke-width:1.5}
+.c{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#111827;text-anchor:middle}
+.cg{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#15803d;text-anchor:middle}
+.lbl{font-size:10px;fill:#6b7280;text-anchor:middle}
+.ln{stroke:#9ca3af;stroke-width:1.5;fill:none}
+</style>
+
+<rect class="a" x="20" y="18" width="480" height="38" rx="8"/>
+<text class="c" x="260" y="34">drone.control.navigate(x=0, y=0, z=1.5,</text>
+<text class="c" x="260" y="48">frame_id="body", auto_arm=True)</text>
+<line x1="260" y1="56" x2="260" y2="78" class="ln"/>
+
+<rect class="b" x="20" y="78" width="480" height="40" rx="8"/>
+<text class="c" x="260" y="96">OffboardControlAPI.navigate()</text>
+<text class="lbl" x="260" y="111">sverk_interfaces/__init__.py</text>
+<line x1="260" y1="118" x2="260" y2="138" class="ln"/>
+
+<rect class="b" x="20" y="138" width="480" height="40" rx="8"/>
+<text class="c" x="260" y="162">создаёт Navigate.Request() и заполняет поля</text>
+<line x1="260" y1="178" x2="260" y2="198" class="ln"/>
+
+<rect class="b" x="20" y="198" width="480" height="40" rx="8"/>
+<text class="c" x="260" y="216">client.call_async(request)</text>
+<text class="lbl" x="260" y="231">вызов ROS 2 сервиса /navigate</text>
+<line x1="260" y1="238" x2="260" y2="258" class="ln"/>
+
+<rect class="b" x="20" y="258" width="480" height="40" rx="8"/>
+<text class="c" x="260" y="276">rclpy.spin_until_future_complete()</text>
+<text class="lbl" x="260" y="291">ждём ответа от сервиса</text>
+<line x1="260" y1="298" x2="260" y2="318" class="ln"/>
+
+<rect class="g" x="20" y="318" width="480" height="40" rx="8"/>
+<text class="cg" x="260" y="342">возвращает Navigate.Response()</text>
+</svg>

@@ -1,0 +1,32 @@
+<svg viewBox="0 0 460 360" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Цепочка offboard_control: от Python до моторов</title>
+<desc>Программа Python через sverk_interfaces вызывает offboard_control, которая управляет PX4 через MicroXRCEAgent.</desc>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.t{font-size:12px;font-weight:600;fill:#111827}
+.d{font-size:10.5px;fill:#6b7280}
+.c{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:#374151}
+</style>
+<g text-anchor="middle">
+<rect class="a" x="80" y="10" width="300" height="50" rx="9"/>
+<text class="t" x="230" y="32">Программа на Python</text>
+<text class="c" x="230" y="50">drone.control.navigate(z=1.5, frame_id='body')</text>
+<line x1="230" y1="60" x2="230" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="80" y="80" width="300" height="50" rx="9"/>
+<text class="t" x="230" y="102">sverk_interfaces</text>
+<text class="d" x="230" y="118">создаёт запрос, вызывает сервис /navigate</text>
+<line x1="230" y1="130" x2="230" y2="150" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="80" y="150" width="300" height="80" rx="9"/>
+<text class="t" x="230" y="172">offboard_control</text>
+<text class="d" x="230" y="188">читает позицию из vehicle_odometry</text>
+<text class="d" x="230" y="202">пересчитывает координаты через tf2</text>
+<text class="d" x="230" y="216">публикует TrajectorySetpoint</text>
+<line x1="230" y1="230" x2="230" y2="250" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="b" x="80" y="250" width="300" height="50" rx="9"/>
+<text class="t" x="230" y="272">PX4 FMU</text>
+<text class="d" x="230" y="288">через MicroXRCEAgent (uXRCE-DDS)</text>
+<line x1="230" y1="300" x2="230" y2="320" stroke="#9ca3af" stroke-width="1.5"/>
+<text class="d" x="230" y="334">ESC → Моторы</text>
+</g>
+</svg>

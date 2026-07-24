@@ -1,0 +1,28 @@
+<svg viewBox="0 0 480 270" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Связь компонентов Обрика</title>
+<desc>Ноутбук подключается по Wi-Fi к бортовому компьютеру, который управляет полётным контроллером PX4 через UART.</desc>
+<style>
+.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}
+.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}
+.t{font-size:13px;font-weight:600;fill:#111827}
+.d{font-size:11px;fill:#6b7280}
+.l{font-size:10.5px;fill:#9ca3af}
+</style>
+<g text-anchor="middle">
+<rect class="b" x="130" y="14" width="220" height="50" rx="9"/>
+<text class="t" x="240" y="40">Ноутбук / планшет</text>
+<text class="d" x="240" y="56">программирование</text>
+<line x1="240" y1="64" x2="240" y2="94" stroke="#9ca3af" stroke-width="1.5"/>
+<text class="l" x="272" y="84">Wi-Fi</text>
+<rect class="a" x="100" y="94" width="280" height="56" rx="9"/>
+<text class="t" x="240" y="118">Бортовой компьютер</text>
+<text class="d" x="240" y="136">Ubuntu · Docker · ROS 2 · Python</text>
+<line x1="240" y1="150" x2="240" y2="180" stroke="#9ca3af" stroke-width="1.5"/>
+<text class="l" x="276" y="170">UART</text>
+<rect class="b" x="100" y="180" width="280" height="56" rx="9"/>
+<text class="t" x="240" y="204">Полётный контроллер</text>
+<text class="d" x="240" y="222">PX4 · стабилизация · ESC</text>
+<line x1="240" y1="236" x2="240" y2="256" stroke="#9ca3af" stroke-width="1.5"/>
+<text class="d" x="240" y="268">Моторы</text>
+</g>
+</svg>

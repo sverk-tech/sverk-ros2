@@ -1,0 +1,26 @@
+<svg viewBox="0 0 500 600" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Навигационная цепочка ArUco</title>
+<desc>Кадры камеры проходят через детектор маркеров, карту и узел локализации; вычисленная позиция отправляется в PX4 EKF2.</desc>
+<style>.node{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}.topic{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.2}.t{font-size:12.5px;font-weight:600;fill:#111827}.c{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;fill:#374151}.d{font-size:10.5px;fill:#6b7280}</style>
+<g text-anchor="middle">
+<rect class="node" x="130" y="14" width="240" height="40" rx="9"/><text class="t" x="250" y="39">Камера (MIPI CSI)</text>
+<line x1="250" y1="54" x2="250" y2="74" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="topic" x="110" y="74" width="280" height="34" rx="7"/><text class="c" x="250" y="95">/camera_1/image_raw</text>
+<line x1="250" y1="108" x2="250" y2="128" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="node" x="110" y="128" width="280" height="46" rx="9"/><text class="t" x="250" y="150">aruco_detect_node</text><text class="d" x="250" y="166">находит маркеры на кадре</text>
+<line x1="250" y1="174" x2="250" y2="194" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="topic" x="110" y="194" width="280" height="34" rx="7"/><text class="c" x="250" y="215">/aruco/det/markers</text>
+<line x1="250" y1="228" x2="250" y2="248" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="node" x="110" y="248" width="280" height="46" rx="9"/><text class="t" x="250" y="270">aruco_map_node</text><text class="d" x="250" y="286">загружает карту маркеров</text>
+<line x1="250" y1="294" x2="250" y2="314" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="topic" x="110" y="314" width="280" height="34" rx="7"/><text class="c" x="250" y="335">/aruco/map/markers</text>
+<line x1="250" y1="348" x2="250" y2="368" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="node" x="110" y="368" width="280" height="46" rx="9"/><text class="t" x="250" y="390">aruco_loc_node</text><text class="d" x="250" y="406">RANSAC + solvePnP — позиция дрона</text>
+<line x1="250" y1="414" x2="250" y2="434" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="topic" x="110" y="434" width="280" height="34" rx="7"/><text class="c" x="250" y="455">/aruco/loc/pose_cov</text>
+<line x1="250" y1="468" x2="250" y2="488" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="node" x="110" y="488" width="280" height="40" rx="9"/><text class="t" x="250" y="513">px4_local_pose_publisher</text>
+<line x1="250" y1="528" x2="250" y2="548" stroke="#9ca3af" stroke-width="1.5"/>
+<rect class="node" x="130" y="548" width="240" height="40" rx="9"/><text class="t" x="250" y="573">PX4 EKF2</text>
+</g>
+</svg>

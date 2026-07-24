@@ -1,0 +1,23 @@
+<svg viewBox="0 0 600 250" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Датчики полётного контроллера</title>
+<desc>Полётный контроллер использует гироскоп, акселерометр и барометр; калибруются все три.</desc>
+<style>.b{fill:#f3f4f6;stroke:#d1d5db;stroke-width:1.5}.a{fill:#eef2ff;stroke:#c7d2fe;stroke-width:1.5}.t{font-size:13px;font-weight:600;fill:#111827}.d{font-size:11px;fill:#6b7280}</style>
+<rect class="a" x="180" y="16" width="240" height="44" rx="10"/>
+<text class="t" x="300" y="43" text-anchor="middle">Полётный контроллер</text>
+<line x1="300" y1="60" x2="300" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="110" y1="80" x2="490" y2="80" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="110" y1="80" x2="110" y2="104" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="300" y1="80" x2="300" y2="104" stroke="#9ca3af" stroke-width="1.5"/>
+<line x1="490" y1="80" x2="490" y2="104" stroke="#9ca3af" stroke-width="1.5"/>
+<g text-anchor="middle">
+<rect class="b" x="20" y="104" width="180" height="120" rx="10"/>
+<text class="t" x="110" y="130">Гироскоп</text>
+<text class="d" x="110" y="156">измеряет угловую</text><text class="d" x="110" y="172">скорость</text>
+<rect class="b" x="210" y="104" width="180" height="120" rx="10"/>
+<text class="t" x="300" y="130">Акселерометр</text>
+<text class="d" x="300" y="156">измеряет линейное</text><text class="d" x="300" y="172">ускорение</text>
+<rect class="b" x="400" y="104" width="180" height="120" rx="10"/>
+<text class="t" x="490" y="130">Барометр</text>
+<text class="d" x="490" y="156">измеряет давление</text><text class="d" x="490" y="172">воздуха (высота)</text>
+</g>
+</svg>

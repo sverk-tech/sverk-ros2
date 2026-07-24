@@ -1,0 +1,19 @@
+<svg viewBox="0 0 620 200" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Подключение QGroundControl по Wi-Fi</title>
+<desc>Бортовой компьютер Обрика связывает полётный контроллер PX4 с программой QGroundControl на компьютере по Wi-Fi через UDP.</desc>
+<g>
+<rect x="24" y="40" width="230" height="84" rx="10" fill="#eef2ff" stroke="#c7d2fe" stroke-width="1.5"/>
+<text x="139" y="72" text-anchor="middle" font-size="13.5" font-weight="600" fill="#111827">Обрик</text>
+<text x="139" y="93" text-anchor="middle" font-size="11.5" fill="#6b7280">PX4 + бортовой компьютер</text>
+</g>
+<g>
+<rect x="366" y="40" width="230" height="84" rx="10" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="481" y="72" text-anchor="middle" font-size="13.5" font-weight="600" fill="#111827">QGroundControl</text>
+<text x="481" y="93" text-anchor="middle" font-size="11.5" fill="#6b7280">на вашем компьютере</text>
+</g>
+<line x1="254" y1="82" x2="366" y2="82" stroke="#9ca3af" stroke-width="1.5"/>
+<text x="310" y="74" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Wi-Fi</text>
+<text x="310" y="98" text-anchor="middle" font-size="10.5" fill="#6b7280">UDP</text>
+<text x="139" y="156" text-anchor="middle" font-size="11" fill="#6b7280">бортовой компьютер раздаёт Wi-Fi</text>
+<text x="139" y="172" text-anchor="middle" font-size="11" fill="#6b7280">или подключается к роутеру</text>
+</svg>

@@ -1,0 +1,14 @@
+<svg viewBox="0 0 540 240" xmlns="http://www.w3.org/2000/svg" role="img" font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+<title>Подключение датчика VL53L1X</title>
+<desc>Лазерный дальномер VL53L1X подключается к бортовому компьютеру по шине I2C.</desc>
+<text x="410" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">Бортовой компьютер</text>
+<text x="120" y="26" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">VL53L1X</text>
+<g font-size="12.5" fill="#111827">
+<text x="410" y="64" text-anchor="middle" font-weight="600">3.3 В</text><line x1="320" y1="60" x2="200" y2="60" stroke="#9ca3af" stroke-width="1.5"/><text x="120" y="64" text-anchor="middle">VIN</text>
+<text x="410" y="100" text-anchor="middle" font-weight="600">GND</text><line x1="320" y1="96" x2="200" y2="96" stroke="#9ca3af" stroke-width="1.5"/><text x="120" y="100" text-anchor="middle">GND</text>
+<text x="410" y="136" text-anchor="middle" font-weight="600">GPIO2 (SDA)</text><line x1="320" y1="132" x2="200" y2="132" stroke="#9ca3af" stroke-width="1.5"/><text x="120" y="136" text-anchor="middle">SDA</text>
+<text x="410" y="172" text-anchor="middle" font-weight="600">GPIO3 (SCL)</text><line x1="320" y1="168" x2="200" y2="168" stroke="#9ca3af" stroke-width="1.5"/><text x="120" y="172" text-anchor="middle">SCL</text>
+<text x="410" y="208" text-anchor="middle" font-weight="600">GPIO4</text><line x1="320" y1="204" x2="200" y2="204" stroke="#9ca3af" stroke-width="1.5"/><text x="120" y="208" text-anchor="middle">XSHUT</text>
+</g>
+<text x="270" y="232" text-anchor="middle" font-size="10.5" fill="#6b7280">XSHUT — только при нескольких датчиках</text>
+</svg>
