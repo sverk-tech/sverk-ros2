@@ -8,7 +8,11 @@
   <license>Apache License 2.0</license>
 
   <!-- <buildtool_depend>ament_cmake</buildtool_depend> -->
-  <exec_depend>ros_gz_bridge</exec_depend>
+  <!-- ros_gz_bridge — только для SITL (full_system_sitl.launch.py). На борту
+       Gazebo нет; SITL-образ ставит ros-gzharmonic + libgz-*-dev явным блоком
+       и скипает этот ключ в rosdep (scripts/sitl/Dockerfile.sitl). Держать его
+       безусловным exec_depend — значит тянуть весь Ignition-стек в бортовой
+       base через rosdep. -->
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>aruco_det_loc</exec_depend>
   <exec_depend>aruco_map</exec_depend>
