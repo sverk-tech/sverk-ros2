@@ -1,0 +1,21 @@
+# cpu_rpi5.yaml — Raspberry Pi 5 / CM5 (BCM2712, 4x Cortex-A76 @ ~2.4 GHz)
+#
+# Homogeneous cores: every core is an A76, so CPU pinning gives nothing —
+# leave cpu_affinity_ids empty and let the scheduler balance. Full-resolution
+# detection (~10-18 ms) fits the 33 ms / 30 fps budget, so coarse-to-fine is
+# optional here; enable it only if you also run heavy co-located nodes.
+#
+# Apply with:
+#   ros2 launch aruco_det_loc aruco_composed.launch.py \
+#     cpu_params_file:=$(ros2 pkg prefix aruco_det_loc)/share/aruco_det_loc/config/cpu_rpi5.yaml
+#
+# The /** wildcard applies to every node in the container; parameters a node
+# does not declare are simply ignored.
+/**:
+  ros__parameters:
+    cpu_affinity_ids: []          # homogeneous A76 → no pinning
+    opencv_num_threads: 2         # 2 of 4 A76; leaves 2 cores for other processes (<70% total)
+    coarse_to_fine_enabled: true  # detect on 640x480 → container ~1.2 cores (headroom)
+    coarse_scale: 0.5             # 0.5 = 640x480 from 1280x960
+    corner_refine_pnp_only: true  # refine only the map markers that feed global PnP
+    subpix_win_size: 5            # half-window for cornerSubPix at coarse_scale 0.5 (x2 upscale)

@@ -1,0 +1,24 @@
+# cpu_a733.yaml — Orange Pi Zero 3W / Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55)
+#
+# big.LITTLE: the six A55 cores are much slower than the two A76. If the CV
+# threads land on A55, detectMarkers on 1280x960 blows past the 33 ms budget.
+# Pin the heavy work to the two A76 cores and run coarse-to-fine.
+#
+# IMPORTANT: verify the A76 core IDs on YOUR board first:
+#   bash $(ros2 pkg prefix aruco_det_loc)/share/aruco_det_loc/scripts/check_cpu_topology.sh
+# It prints the IDs whose CPU part is 0xD0B (Cortex-A76). On the sun60iw2
+# kernel used by scripts/orangepi-zero3w (see its README) the layout is
+# A55 = cpu0-5, A76 = cpu6-7 — edit the list below if the script disagrees.
+#
+# Apply with:
+#   ros2 launch aruco_det_loc aruco_composed.launch.py \
+#     cpu_params_file:=$(ros2 pkg prefix aruco_det_loc)/share/aruco_det_loc/config/cpu_a733.yaml
+/**:
+  ros__parameters:
+    cpu_affinity_ids: [6, 7]      # the two A76 cores — VERIFY with check_cpu_topology.sh
+    opencv_num_threads: 2         # = number of A76 cores
+    coarse_to_fine_enabled: true  # coarse detect keeps us inside 33 ms on A76
+    coarse_scale: 0.5             # 640x480 from 1280x960; 0.25 loses far/edge
+                                  # markers of the 65-degree fisheye crop at 1.5 m
+    corner_refine_pnp_only: true  # refine only the map markers that feed global PnP
+    subpix_win_size: 6            # half-window for the +/-2 px error from x2 upscale

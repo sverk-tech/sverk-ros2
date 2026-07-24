@@ -16,6 +16,7 @@
 
   <!-- Runtime/build deps for the node -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
