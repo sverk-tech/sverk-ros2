@@ -1,159 +1,185 @@
 # px4_local_pose_publisher
 
-ROS 2-узел, который подписывается на визуальную позу (например, из ArUco/VIO), совмещает её с локальной позицией PX4 через offset и публикует оценку позиции в полётный контроллер PX4 по протоколу uXRCE-DDS (топик `vehicle_visual_odometry`).
+Пакет отправляет в PX4 EKF2 **external local position** через
+`px4_ros2::LocalPositionMeasurementInterface` (топик
+`fmu/in/vehicle_visual_odometry`, сообщение `px4_msgs/VehicleOdometry`) по
+uXRCE-DDS. В нём два независимых узла-потребителя под **два источника** внешней
+позы — выбирается тот, что соответствует сценарию борта:
+
+| Узел (executable) | Источник | Вход | Сценарий |
+|---|---|---|---|
+| `pose_subscriber_tf2` (`VpePublisher`) | ArUco-полигон | `/aruco/world_pose` | обрик / гигаобрик с камерой + маркеры |
+| `lidar_odom_publisher` (`LidarOdomPublisher`) | 3D-лидар Unitree L2 + point_lio | `/aft_mapped_to_init` | гигаобрик с 3D-лидаром (аддон `lidar_3d`) |
+
+Оба узла — тонкие: конвертация фреймов ENU/FLU→NED/FRD, честное время выборки
+(`timestamp_sample`), предохранитель `allow_send_vio` и watchdog устаревания.
+Никакой TF/offset-логики в них нет — она вынесена наружу (ArucoTfNode для ArUco;
+`T_mount`/`T_post` из launch для лидара).
+
+---
+
+## Сценарий 1 — ArUco VPE (`pose_subscriber_tf2` / `VpePublisher`)
+
+Берёт готовую позу `base_link` в мировом фрейме (ENU, тело FLU) от внешнего
+ArucoTfNode, конвертирует её в NED/FRD и отправляет в PX4 EKF2.
+
+Узел **не** содержит TF/offset-логики — она вынесена в ArucoTfNode. Здесь только
+конвертация фреймов, корректное время выборки и отправка в EKF2.
 
 ## Зависимости
 
 - ROS 2 Humble
-- px4_ros2_interface_lib (LocalPositionMeasurementInterface)
-- px4_msgs
-- tf2_ros, geometry_msgs
-- PX4 1.15.x с uXRCE-DDS
+- PX4 v1.15.4 + uXRCE-DDS
+- `px4_msgs`, `px4_ros_com` — ветка **release/1.15** (совпадает с прошивкой)
+- `px4_ros2_cpp` (форк под 1.15, с `reset_counter` в `VehicleOdometry`)
+- `geometry_msgs`, `std_msgs`, `Eigen`
 
 ## Запуск
 
 ```bash
 ros2 launch px4_local_pose_publisher pose_subscriber_tf2.launch.py
-```
-
-С переопределением параметров через аргументы launch:
-
-```python
-IncludeLaunchDescription(
-    PythonLaunchDescriptionSource([...]),
-    launch_arguments={
-        'camera_frame_id': 'main_camera_optical',
-        'publish_rate_hz': '35.0',
-    }.items()
-)
+# по умолчанию allow_send_vio:=false — в PX4 ничего не уходит.
+# после проверки позы/фреймов на земле:
+ros2 launch px4_local_pose_publisher pose_subscriber_tf2.launch.py allow_send_vio:=true
 ```
 
 ## Топики
 
 | Направление | Топик | Тип | Описание |
-|------------|--------|-----|----------|
-| Вход | `pose_cov_topic` (по умолч. `aruco_map/pose_cov`) | `geometry_msgs/msg/PoseWithCovarianceStamped` | Поза камеры в системе ArUco/карты (с ковариацией). |
-| Вход | `vehicle_local_position_topic` (по умолч. `/fmu/out/vehicle_local_position`) | `px4_msgs/msg/VehicleLocalPosition` | Локальная позиция от PX4 для вычисления offset. |
-| Выход | `fmu/in/vehicle_visual_odometry` (через px4_ros2) | px4_msgs (VehicleOdometry) | Визуальная одометрия в PX4 для EKF2. |
+|---|---|---|---|
+| Вход | `/aruco/world_pose` | `geometry_msgs/PoseWithCovarianceStamped` | Поза `base_link` в world-фрейме (ENU, FLU), `header.stamp` = время захвата кадра. QoS best_effort. |
+| Вход | `/aruco/reset_counter` | `std_msgs/UInt8` | Счётчик discontinuity внешнего estimator (бамп при commit нового offset). QoS reliable + transient_local, KeepLast(1). |
+| Выход | `fmu/in/vehicle_visual_odometry` | `px4_msgs/VehicleOdometry` | External local position для EKF2 (через px4_ros2). |
 
-## Передаваемые параметры
+## Параметры
 
-Все параметры объявлены в узле и могут передаваться через launch (файл или `launch_arguments`).
+| Параметр | Тип | По умолч. | Описание |
+|---|---|---|---|
+| `world_pose_topic` | string | `/aruco/world_pose` | Входная поза. |
+| `reset_counter_topic` | string | `/aruco/reset_counter` | Входной счётчик сброса. |
+| `allow_send_vio` | bool | `false` | Предохранитель: пока false — в PX4 ничего не уходит. |
+| `watchdog_rate_hz` | double | `10.0` | Частота watchdog-проверки устаревания (НЕ частота отправки — она on-new). |
+| `data_timeout_sec` | double | `0.5` | Таймаут без свежей позы → предупреждение, отправка прекращается. |
 
-### Топики
+`allow_send_vio`, `watchdog_rate_hz`, `data_timeout_sec` можно менять на лету
+(`on_set_parameters_callback`), напр. включить отправку без перезапуска:
+```bash
+ros2 param set /pose_subscriber_tf2 allow_send_vio true
+```
+Топики (`*_topic`) — только через launch/рестарт (подписки создаются в конструкторе).
 
-| Параметр | Тип | По умолчанию | Описание |
-|----------|-----|--------------|----------|
-| `pose_cov_topic` | string | `aruco_map/pose_cov` | Топик входящей позы с ковариацией (ArUco/VIO). |
-| `vehicle_local_position_topic` | string | `/fmu/out/vehicle_local_position` | Топик локальной позиции PX4 для расчёта offset. |
-
-### Системы координат (TF frame_id)
-
-| Параметр | Тип | По умолчанию | Описание |
-|----------|-----|--------------|----------|
-| `camera_frame_id` | string | `main_camera_optical` | Frame_id камеры, в которой задана входящая поза. |
-| `base_link_frame_id` | string | `base_link` | Frame_id корпуса дрона. |
-| `world_frame_id` | string | `map` | Глобальная мировая система (например, map). |
-| `aruco_map_frame_id` | string | `aruco_map_detected` | Система координат карты ArUco (источник позы). |
-| `offset_frame_id` | string | `aruco_map` | Frame_id для публикации статического TF offset (map → aruco_map). |
-
-### Поведение и таймауты
-
-| Параметр | Тип | По умолчанию | Описание |
-|----------|-----|--------------|----------|
-| `data_timeout_sec` | float | `0.5` | Таймаут (с) без данных с `pose_cov_topic`; при превышении отправляется fallback с высокой дисперсией. |
-| `offset_timeout` | float | `3.0` (в коде) / `5.0` (в launch) | Максимальное время жизни offset (с); при `allow_offset_timeout_reset == true` по истечении offset сбрасывается. |
-| `allow_offset_timeout_reset` | bool | `false` | Разрешить ли сброс offset по таймауту в полёте (обычно выключено для стабильности). |
-| `allow_send_vio` | bool | `false` | Разрешить ли отправку данных с одометии по Aruco на полетный контроллер (обычно выключено для стабильности полетов). |
-| `publish_rate_hz` | float | `30.0` (в коде) / `35.0` (в launch) | Частота (Гц) публикации в PX4. |
-| `fallback_variance` | float | `0.5` | Дисперсия позиции/ориентации при отправке fallback (когда нет актуальной визуальной позы). |
+`transient_local` QoS передаёт последнее значение `reset_counter` поздно
+запущенному VPE. Смена счётчика сообщает PX4 о смене системы координат внешней
+оценки.
 
 ## Поведение
 
-1. Узел подписывается на `pose_cov_topic` и на `vehicle_local_position_topic`.
-2. При первом появлении и визуальной позы, и позиции PX4 вычисляется **offset** (преобразование world → aruco_map) и публикуется статический TF `world_frame_id` → `offset_frame_id`.
-3. Каждые `1/publish_rate_hz` секунд поза из ArUco переводится в world с учётом offset, затем в base_link через TF (camera → base_link), конвертируется в NED и отправляется в PX4 через `LocalPositionMeasurementInterface` (топик `fmu/in/vehicle_visual_odometry`) с поддержкой `reset_counter`.
-4. При сбросе offset (релокализация и т.п.) увеличивается `reset_counter`, чтобы EKF2 корректно обработал разрыв оценки.
-5. Если данные с `pose_cov_topic` не приходят дольше `data_timeout_sec`, в PX4 уходит fallback-измерение с высокой дисперсией.
+1. На каждое сообщение `/aruco/world_pose` (`worldPoseCallback`):
+   позиция конвертируется ENU→NED (`enu_to_ned_local_frame`), ориентация —
+   ENU/FLU→NED/FRD (`ros_to_px4_orientation`, делает **оба** поворота: мировой и
+   телесный), `timestamp_sample` берётся из `header.stamp` (время захвата кадра),
+   диагональ ковариации переносится со свопом осей, прикладывается актуальный
+   `reset_counter` — и измерение **сразу** уходит в EKF2 (on-new, один раз).
+2. `watchdogCallback` только следит за устареванием данных и пишет предупреждение;
+   он **ничего не отправляет**. При дропауте EKF2 коастит на IMU и сам перестаёт
+   фьюзить EV по таймауту — повторная отправка старой/нейтральной позы
+   дестабилизировала бы фильтр, поэтому её нет.
+3. При смене `reset_counter` EKF2 обрабатывает разрыв как релокализацию.
+   Потеря и возврат маркеров сохраняют counter вместе с `map→aruco_map` offset.
+4. Covariance floors применяются upstream в ArucoTfNode. VPE переставляет X/Y
+   variances при ENU→NED conversion и передаёт их в PX4 без повторной оценки.
+
+## Настройка PX4 и отладка (v1.15.4)
+
+Полный справочник по параметрам EKF2 (что выставить до полёта, что тюнить в
+полёте, битовые маски), методам проверки валидности данных и командам
+MAVLink-консоли — в отдельном документе:
+
+**→ [`PX4_EKF2_TUNING_AND_DEBUG.md`](PX4_EKF2_TUNING_AND_DEBUG.md)**
+
+Кратко: EV-ядро (`EKF2_EV_CTRL=11`, `EV_NOISE_MD=0`, `GPS/MAG/BARO` off,
+`UXRCE_DDS_SYNCT=1`) уже корректно. Перед полётом — `EKF2_EV_DELAY=0` (не 50:
+`timestamp_sample` = время захвата + timesync), высоту на лидар (`EKF2_HGT_REF=2`),
+indoor-лимиты скорости/наклона. **`EKF2_EV_POS_X/Y/Z` оставить 0** — экстринсик
+камеры применяется на стороне ArUco/tf, дублировать его здесь нельзя.
+
+Перед `allow_send_vio:=true` проверь `/aruco/world_pose`, фреймы и
+`estimator_aid_src_ev_pos` / `estimator_aid_src_ev_yaw` в логе (см. §6–7 дока).
 
 ---
 
-## API (заголовки): `pose_subscriber_tf2`
+## Сценарий 2 — лидарная одометрия (`lidar_odom_publisher` / `LidarOdomPublisher`)
 
-Заголовки узла `pose_subscriber_tf2`: классы и параметры, используемые при публикации VIO в PX4.
+Источник — **3D-лидар Unitree L2** с одометрией [point_lio]. point_lio публикует
+позу **лидара** в своём мире одометрии (гравитационно-выровнен, yaw произвольный)
+в `nav_msgs/Odometry` на `/aft_mapped_to_init`. Узел пересчитывает её в позу
+`base_link` в world ENU по цепочке трансформов `T_final = T_post · T_odom · T_mount`
+(где `T_mount` — поза лидара на раме, `T_post` — доворот мира одометрии к ENU),
+конвертирует в NED/FRD и шлёт в EKF2 **on-new** с ограничением частоты `max_rate_hz`
+(point_lio может отдавать сотни Гц, EKF2 столько не нужно).
 
-### Файлы
+Этот сценарий приходит вместе с аддоном 3D-лидара (тип `lidar_3d` в
+`image_builder/types.yaml`, `Dockerfile.3d_lidar`, `docker-compose.3d_lidar.yml`).
+На борту узел запускается из `full_system_real.launch.py` по флагу
+`ENABLE_LIDAR_3D_ODOM` (закрыт предохранителем `LIDAR_3D_ODOM_SEND_VIO`); значения
+`LIDAR_3D_MOUNT_RPY` / `LIDAR_3D_MOUNT_XYZ` / `LIDAR_3D_POST_RPY` пробрасываются из
+device `.env` в launch-аргументы `mount_rpy` / `mount_xyz` / `post_rpy`.
 
-| Файл | Описание |
-|------|----------|
-| `pose_subscriber_tf2.hpp` | Узел VPE: подписка на позу ArUco/VIO и `vehicle_local_position`, публикация в PX4. |
-| `pose_subscriber.hpp` | Подписчик позы (другая нода). |
-| `local_pose_publisher.hpp` | Публикатор локальной позы (другая нода). |
+### Запуск (отдельно, для проверки на земле)
 
-Документация ниже относится к **pose_subscriber_tf2** (основной узел для VIO → PX4).
+```bash
+ros2 launch px4_local_pose_publisher lidar_odom_publisher.launch.py
+# по умолчанию allow_send_vio:=false — в PX4 ничего не уходит.
+# после проверки одометрии/фреймов на земле:
+ros2 launch px4_local_pose_publisher lidar_odom_publisher.launch.py allow_send_vio:=true
+```
 
-### Классы (`pose_subscriber_tf2.hpp`)
+> **Сначала проверь фреймы на земле.** Дефолты `mount_*`/`post_*` — значения
+> тестовой рамы `ros2_uni` (лидар 17 см позади `base_link`, наклон −7° по тангажу,
+> мир одометрии довёрнут на 180° по yaw). **Под своё крепление их надо перемерить.**
+> Подними и поверни раму руками и сверь знаки осей `/aft_mapped_to_init` до отправки
+> в PX4.
 
-#### VpePublisher
+### Топики
 
-Реализует публикацию визуальной одометрии в PX4 через `px4_ros2::LocalPositionMeasurementInterface`.
+| Направление | Топик | Тип | Описание |
+|---|---|---|---|
+| Вход | `/aft_mapped_to_init` | `nav_msgs/Odometry` | Поза лидара в мире одометрии point_lio. QoS best_effort. |
+| Выход | `fmu/in/vehicle_visual_odometry` | `px4_msgs/VehicleOdometry` | External local position для EKF2 (через px4_ros2). |
 
-- **Базовый класс:** `px4_ros2::LocalPositionMeasurementInterface`
-- **Поведение:** подписка на позу с ковариацией и на `VehicleLocalPosition`, расчёт offset (world ↔ aruco_map), преобразование в NED, отправка в `fmu/in/vehicle_visual_odometry`.
+### Параметры
 
-##### Публичные методы
+| Параметр | Тип | По умолч. | Описание |
+|---|---|---|---|
+| `odom_topic` | string | `/aft_mapped_to_init` | Входная одометрия point_lio (read-only, через launch). |
+| `mount_rpy` | double[3] | `[0.0, -0.122, 0.0]` | RPY (рад) лидара относительно `base_link` (`Rz·Ry·Rx`). Read-only. |
+| `mount_xyz` | double[3] | `[-0.170, 0.0, 0.0]` | Смещение (м) лидара относительно `base_link`. Read-only. |
+| `post_rpy` | double[3] | `[0.0, 0.0, 3.14159]` | Доворот мира одометрии point_lio к world ENU (RPY, рад). Read-only. |
+| `allow_send_vio` | bool | `false` | Предохранитель: пока false — в PX4 ничего не уходит. |
+| `max_rate_hz` | double | `30.0` | Ограничение частоты отправки в EKF2 (0 = без лимита). |
+| `watchdog_rate_hz` | double | `10.0` | Частота watchdog-проверки устаревания (НЕ частота отправки). |
+| `data_timeout_sec` | double | `0.5` | Таймаут без свежей одометрии → предупреждение, отправка прекращается. |
 
-| Метод | Описание |
-|-------|----------|
-| `VpePublisher(rclcpp::Node & node)` | Конструктор: объявление параметров, подписки, TF, таймер. |
-| `void start()` | Запуск периодической публикации с частотой `publish_rate_hz`. |
-| `void stop()` | Остановка таймера. |
+`allow_send_vio`, `max_rate_hz`, `watchdog_rate_hz`, `data_timeout_sec` меняются на
+лету (`on_set_parameters_callback`). Геометрия (`odom_topic`, `mount_*`, `post_rpy`)
+— только через launch/рестарт (подписка и трансформы создаются в конструкторе).
 
-##### Внутренние (private)
+### Отличия от сценария 1 (ArUco)
 
-- `getTimestamp()` — время в микросекундах (единый источник для синхронизации с offboard/PX4).
-- `timeFromMicros(uint64_t us)` — преобразование микросекунд в `rclcpp::Time`.
-- `declareParameters()` / `setupSubscriptions()` — инициализация параметров и топиков.
-- `poseCovCallback`, `vehicleLocalPositionCallback`, `timerCallback` — обработка входящих данных и цикл публикации.
-- `resetOffset()`, `computeOffset()`, `applyOffset()` — управление offset (world ↔ aruco_map).
-- `sendFallbackData()` — отправка fallback-измерения при отсутствии визуальной позы.
-- Конвертеры ENU ↔ NED и утилиты TF (`poseMsgToTf`, `tfToPoseMsg`).
+- **Частота.** point_lio отдаёт десятки–сотни Гц, поэтому есть `max_rate_hz`
+  (у ArUco его нет — маркеры идут с частотой камеры).
+- **reset_counter = 0 всегда.** point_lio не сбрасывает свой мир в полёте (в
+  отличие от ArUco-offset, где смена counter = релокализация). Разрыва системы
+  координат нет, поэтому и `reset_counter_topic` не нужен.
+- **Ковариация.** Диагональ `pose.covariance` одометрии со свопом X/Y (ENU→NED);
+  point_lio обычно шлёт нули → флор `clampVar`. `T_post` учитывается точно только
+  для yaw, кратных 90°; реальный нижний порог всё равно задают
+  `EKF2_EVP_NOISE`/`EKF2_EVA_NOISE`.
 
-##### Параметры (соответствуют `declare_parameter` в .cpp)
+Настройка EKF2 — та же, что в [`PX4_EKF2_TUNING_AND_DEBUG.md`](PX4_EKF2_TUNING_AND_DEBUG.md)
+(EV-ядро `EKF2_EV_CTRL=11`, `EKF2_EV_DELAY=0`, высота на лидар `EKF2_HGT_REF=2`,
+`EKF2_EV_POS_X/Y/Z=0` — экстринсик применяется через `T_mount`, дублировать в PX4
+нельзя). Перед `allow_send_vio:=true` проверь `estimator_aid_src_ev_pos` /
+`estimator_aid_src_ev_yaw` в логе.
 
-Строковые (топики и frame_id):
-
-- `pose_cov_topic`, `vehicle_local_position_topic`
-- `camera_frame_id`, `base_link_frame_id`, `world_frame_id`, `aruco_map_frame_id`, `offset_frame_id`
-
-Логика и таймауты:
-
-- `allow_offset_timeout_reset` (bool)
-- `allow_send_vio` (bool)
-- `publish_rate_hz` (double)
-- `offset_timeout` (double)
-- `data_timeout_sec` (double)
-- `fallback_variance` (float)
-
-Константы по умолчанию в коде:
-
-- `OFFSET_TIMEOUT_DEFAULT = 3.0`
-- `DATA_TIMEOUT_DEFAULT = 0.5`
-- `FALLBACK_VARIANCE_DEFAULT = 0.5f`
-
-##### Состояние (offset и reset_counter)
-
-- `offset_` — преобразование world → aruco_map.
-- `offset_initialized_`, `reset_flag_`, `last_offset_reset_time_`.
-- `reset_counter_` — счётчик сбросов, передаётся в PX4 в сообщении визуальной одометрии для EKF2.
-
-#### VpePublisherNode
-
-Обёртка `rclcpp::Node`, которая создаёт `VpePublisher`, регистрирует его в навигационном интерфейсе PX4 и запускает публикацию.
-
-- **Публичные методы:** конструктор/деструктор.
-- **Внутри:** `interface_` (`VpePublisher`), вызовы `doRegister()`, `start()`, таймер для поддержания работы узла.
-
-### Соответствие параметров launch и узла
-
-Параметры, передаваемые через launch (в т.ч. `launch_arguments`), должны совпадать с именами из таблиц раздела [Передаваемые параметры](#передаваемые-параметры) выше. Все перечисленные там параметры объявлены в `VpePublisher::declareParameters()` и используются в логике узла.
+[point_lio]: https://github.com/hku-mars/Point-LIO

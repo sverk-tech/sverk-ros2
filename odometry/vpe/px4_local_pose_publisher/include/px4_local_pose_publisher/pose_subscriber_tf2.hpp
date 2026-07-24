@@ -2,29 +2,25 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <px4_ros2/navigation/experimental/local_position_measurement_interface.hpp>
-#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
-#include <geometry_msgs/msg/transform_stamped.hpp>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_ros/static_transform_broadcaster.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <px4_msgs/msg/vehicle_local_position.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 #include <Eigen/Geometry>
+#include <atomic>
 #include <mutex>
-#include <condition_variable>
-#include <chrono>
 #include <string>
 #include <memory>
-#include <thread>
-#include <atomic>
-
+#include <vector>
 
 using namespace std::chrono_literals;
 
 namespace px4_local_pose_publisher
 {
 
+// Receives world-frame base_link pose (ENU) produced by ArucoTfNode,
+// converts it to NED/FRD and sends a LocalPositionMeasurement to PX4
+// EKF2 on-new (i.e. once per incoming pose, stamped with the frame capture
+// time). No TF lookups, no offset computation, no fixed-rate re-sending —
+// that is ArucoTfNode's job, and re-sending stale poses corrupts EKF2.
 class VpePublisher : public px4_ros2::LocalPositionMeasurementInterface
 {
 public:
@@ -35,113 +31,66 @@ public:
   void stop();
 
 private:
-  /** Timestamp in microseconds (single time base for offboard/PX4 sync). */
-  uint64_t getTimestamp();
-  /** Convert microseconds to rclcpp::Time for ROS 2 message fields. */
-  rclcpp::Time timeFromMicros(uint64_t us) const;
+  void worldPoseCallback(
+    const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  void resetCounterCallback(const std_msgs::msg::UInt8::SharedPtr msg);
+  void watchdogCallback();
 
-  void declareParameters();
-  void setupSubscriptions();
-  
-  // Callbacks
-  void poseCovCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
-  void vehicleLocalPositionCallback(const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg);
-  void timerCallback();
-  
-  // Core logic
-  void resetOffset();
-  bool computeOffset();
-  void applyOffset(tf2::Transform& transform);
-  void sendFallbackData();
-  
-  // Conversions: ROS ENU (X east, Y north, Z up) <-> PX4 NED (X north, Y east, Z down).
-  Eigen::Quaternionf convertENUToNEDQuaternion(const Eigen::Quaternionf & quat_enu);   // ENU -> NED
-  Eigen::Vector3f convertENUToNEDPosition(const Eigen::Vector3f & pos_enu);         // ENU -> NED
-  Eigen::Quaternionf convertNEDToENUQuaternion(const Eigen::Quaternionf & quat_ned);   // NED -> ENU
-  Eigen::Vector3f convertNEDToENUPosition(const Eigen::Vector3f & pos_ned);         // NED -> ENU
-  
-  // TF
-  tf2::Transform poseMsgToTf(const geometry_msgs::msg::Pose& pose);
-  geometry_msgs::msg::Pose tfToPoseMsg(const tf2::Transform& tf);
+  // Allows safe runtime reconfiguration of operational params (esp. the
+  // allow_send_vio safety switch) via `ros2 param set` while the node runs.
+  rcl_interfaces::msg::SetParametersResult onSetParameters(
+    const std::vector<rclcpp::Parameter> & params);
 
-  // Node reference
+  // Publishes a single measurement to PX4 (guarded by allow_send_vio_).
+  void sendMeasurement(const px4_ros2::LocalPositionMeasurement & meas);
+
+  // ENU/FLU → NED/FRD conversions (via px4_ros_com)
+  static Eigen::Vector3f    enuToNedPos(const Eigen::Vector3f & enu);
+  static Eigen::Quaternionf rosToPx4Quat(const Eigen::Quaternionf & enu_flu);
+
+  // ── Node reference ──────────────────────────────────────────────────────
   rclcpp::Node & node_;
-  
-  // Subscriptions
-  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pose_cov_sub_;
-  rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr vehicle_local_position_sub_;
-  
-  // Timer
-  rclcpp::TimerBase::SharedPtr timer_;
-  
-  // TF
-  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-  std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;
-  
-  // Data
-  std::mutex data_mutex_;
-  // latest_pose_: T_world_camera from pose_cov_topic_; Pose.position.* treated as ENU (ROS).
-  geometry_msgs::msg::PoseStamped::SharedPtr latest_pose_;
-  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr latest_pose_cov_;
-  // latest_local_position_: PX4 VehicleLocalPosition (NED).
-  px4_msgs::msg::VehicleLocalPosition::SharedPtr latest_local_position_;
-  rclcpp::Time last_data_time_;
-  bool has_valid_data_;
-  std::atomic<bool> is_running_{false};
 
-  // Precomputed PX4 measurement (updated in processingLoop()); timerCallback() sends via update().
-  bool have_latest_measurement_{false};
-  // position_* in NED (PX4 convention).
-  px4_ros2::LocalPositionMeasurement latest_local_position_measurement_{};
-  
-  // Offset (map/world -> aruco_map), computed/applied in ENU (ROS TF).
-  tf2::Transform offset_;  // world (map) -> aruco_map (ENU)
-  bool offset_initialized_;
-  bool reset_flag_;
-  rclcpp::Time last_offset_reset_time_;
-  /** PX4 EKF2 reset counter: incremented on offset reset (relocalization / discontinuity). */
-  uint8_t reset_counter_ {0};
+  // ── Subscriptions ────────────────────────────────────────────────────────
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr world_pose_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr reset_counter_sub_;
 
-  // ===========================
-  // Worker thread + queue
-  // ===========================
-  std::mutex queue_mutex_;
-  std::condition_variable queue_cv_;
-  bool worker_stop_{false};
-  // Single-slot queue: only the newest pose is processed.
-  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pending_pose_cov_;
-  bool pending_pose_cov_valid_{false};
-  std::thread processing_thread_;
+  // ── Watchdog timer (staleness detection only — never re-sends data) ──────
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
 
-  // Incremented on each new pose in poseCovCallback(); worker checks to avoid stale commits.
-  std::atomic<uint64_t> pose_seq_{0};
+  // ── Dynamic parameter callback handle ────────────────────────────────────
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
 
-  void processingLoop();
-  
-  // Parameters
-  std::string pose_topic_;
-  std::string pose_cov_topic_;
-  std::string vehicle_local_position_topic_;
-  std::string camera_frame_id_;
-  std::string base_link_frame_id_;
-  std::string world_frame_id_;
-  std::string aruco_map_frame_id_;
-  std::string offset_frame_id_;
-  
-  bool use_pose_cov_;
-  bool allow_offset_timeout_reset_;
-  bool allow_send_vio_;
-  double publish_rate_hz_;
-  double offset_timeout_;
-  double data_timeout_sec_;
-  float fallback_variance_;
-  
-  // Default timeouts / variances
-  const double OFFSET_TIMEOUT_DEFAULT = 3.0;
-  const double DATA_TIMEOUT_DEFAULT = 0.5;
-  const float FALLBACK_VARIANCE_DEFAULT = 0.5f;
+  // ── State (protected by mutex_) ──────────────────────────────────────────
+  std::mutex   mutex_;
+  rclcpp::Time last_pose_time_;
+  bool         has_data_{false};
+  bool         stale_warned_{false};
+  uint8_t      reset_counter_{0};
+
+  // ── Send-time guard state (touched only in worldPoseCallback → lock-free;
+  //     the node is spun single-threaded) ───────────────────────────────────
+  // Monotonic guard: stamp of the last pose that passed the guard. A pose whose
+  // capture stamp is not strictly newer is dropped (out-of-order / backward
+  // time jump). Init to epoch so the first pose always passes.
+  rclcpp::Time last_sent_sample_{0, 0, RCL_ROS_TIME};
+  uint64_t     dropped_stale_{0};     // dropped: older than max_measurement_age_sec_
+  uint64_t     dropped_nonmono_{0};   // dropped: not strictly newer than last sent
+
+  // ── Parameters ───────────────────────────────────────────────────────────
+  // Topics are read once at construction (subscriptions are created from them).
+  std::string world_pose_topic_;
+  std::string reset_counter_topic_;
+  // Runtime-reconfigurable via onSetParameters(). allow_send_vio_ is read
+  // lock-free in sendMeasurement() → atomic; the others are guarded by mutex_.
+  std::atomic<bool> allow_send_vio_{false};
+  double            watchdog_rate_hz_{10.0};
+  double            data_timeout_sec_{0.5};
+  // Drop a pose at send time if its capture stamp is older than this (s): a
+  // post-stall burst of queued stale poses then never reaches EKF2 (which would
+  // otherwise reject them past its fusion horizon or reset). <=0 disables.
+  // Guarded by mutex_ (written in onSetParameters, read in worldPoseCallback).
+  double            max_measurement_age_sec_{0.25};
 };
 
 class VpePublisherNode : public rclcpp::Node
@@ -152,7 +101,6 @@ public:
 
 private:
   std::unique_ptr<VpePublisher> interface_;
-  rclcpp::TimerBase::SharedPtr shutdown_timer_;
 };
 
 } // namespace px4_local_pose_publisher

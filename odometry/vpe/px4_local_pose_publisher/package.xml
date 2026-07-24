@@ -16,10 +16,8 @@
   <depend>eigen</depend>
   <depend>eigen3_cmake_module</depend>
   <depend>geometry_msgs</depend>
-  <depend>tf2_ros</depend>
+  <depend>nav_msgs</depend>
   <depend>px4_ros_com</depend>
-  <depend>tf2</depend>
-  <depend>tf2_eigen</depend>
   <depend>std_msgs</depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>

@@ -1,26 +1,46 @@
+#!/usr/bin/env python3
+"""
+pose_subscriber_tf2.launch.py
+-----------------------------
+VPE (Visual Position Estimate) для нового ArUco composed-пайплайна.
+
+Нода pose_subscriber_tf2 — тонкий потребитель: берёт готовую позу base_link
+в world-фрейме (ENU, тело FLU) от ArucoTfNode, конвертирует в NED/FRD и шлёт
+в PX4 EKF2 on-new (по приходу позы, со штампом времени захвата кадра).
+Вся TF/offset-логика — в ArucoTfNode (aruco_composed.launch.py), здесь её нет.
+
+Вход:
+  /aruco/world_pose     (geometry_msgs/PoseWithCovarianceStamped, ENU)
+  /aruco/reset_counter  (std_msgs/UInt8)
+
+ВНИМАНИЕ: allow_send_vio по умолчанию false — поза в PX4 НЕ уходит, пока явно
+не выставишь true (сначала проверь /aruco/world_pose и фреймы на земле).
+"""
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
+
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument('pose_cov_topic', default_value='aruco_map/pose_cov'),
-        DeclareLaunchArgument('vehicle_local_position_topic', default_value='/fmu/out/vehicle_local_position'),
+        # Топики (входы от ArucoTfNode)
+        DeclareLaunchArgument('world_pose_topic',    default_value='/aruco/world_pose'),
+        DeclareLaunchArgument('reset_counter_topic', default_value='/aruco/reset_counter'),
 
-        DeclareLaunchArgument('camera_frame_id', default_value='camera_optical_1'),
-        DeclareLaunchArgument('base_link_frame_id', default_value='base_link'),
-        DeclareLaunchArgument('world_frame_id', default_value='map'),
-        DeclareLaunchArgument('aruco_map_frame_id', default_value='aruco_map_detected'),
-        DeclareLaunchArgument('offset_frame_id', default_value='aruco_map'),
-
-        DeclareLaunchArgument('data_timeout_sec', default_value='0.5'),
-        DeclareLaunchArgument('offset_timeout', default_value='5.0'),
-        DeclareLaunchArgument('allow_offset_timeout_reset', default_value='false'),
-        DeclareLaunchArgument('allow_send_vio', default_value='false'),
-        DeclareLaunchArgument('publish_rate_hz', default_value='20.0'),
-        DeclareLaunchArgument('fallback_variance', default_value='0.5'),
+        # Поведение
+        DeclareLaunchArgument('allow_send_vio',   default_value='false',
+            description='Разрешить отправку позы в PX4 EKF2. true — только после проверки позы/фреймов.'),
+        DeclareLaunchArgument('watchdog_rate_hz', default_value='10.0',
+            description='Частота watchdog-проверки устаревания данных, Гц (не частота отправки — она on-new).'),
+        DeclareLaunchArgument('data_timeout_sec', default_value='0.5',
+            description='Таймаут (с) без свежей позы, после которого пишется предупреждение (отправка прекращается).'),
+        DeclareLaunchArgument('max_measurement_age_sec', default_value='0.25',
+            description='Дропать позу, если она старше этого (с) на момент отправки: после залипа '
+                        'моста очередь best_effort сбрасывает пачку старых поз, а такой burst '
+                        'ломает EKF2 (reject/reset за горизонтом фьюжена). <=0 отключает.'),
 
         Node(
             package='px4_local_pose_publisher',
@@ -28,27 +48,17 @@ def generate_launch_description():
             name='pose_subscriber_tf2',
             output='screen',
             parameters=[{
-                # Topics (declare_parameter in pose_subscriber_tf2)
-                'pose_cov_topic': LaunchConfiguration('pose_cov_topic'),
-                'vehicle_local_position_topic': LaunchConfiguration('vehicle_local_position_topic'),
-
-                # Coordinate frames
-                'camera_frame_id': LaunchConfiguration('camera_frame_id'),
-                'base_link_frame_id': LaunchConfiguration('base_link_frame_id'),
-                'world_frame_id': LaunchConfiguration('world_frame_id'),
-                'aruco_map_frame_id': LaunchConfiguration('aruco_map_frame_id'),
-                'offset_frame_id': LaunchConfiguration('offset_frame_id'),
-
-                # Behavior
-                'data_timeout_sec': ParameterValue(LaunchConfiguration('data_timeout_sec'), value_type=float),
-                'offset_timeout': ParameterValue(LaunchConfiguration('offset_timeout'), value_type=float),
-                'allow_offset_timeout_reset': ParameterValue(
-                    LaunchConfiguration('allow_offset_timeout_reset'), value_type=bool),
-                'allow_send_vio': ParameterValue(
-                    LaunchConfiguration('allow_send_vio'), value_type=bool),
-                'publish_rate_hz': ParameterValue(LaunchConfiguration('publish_rate_hz'), value_type=float),
-                'fallback_variance': ParameterValue(LaunchConfiguration('fallback_variance'), value_type=float),
+                'world_pose_topic':    LaunchConfiguration('world_pose_topic'),
+                'reset_counter_topic': LaunchConfiguration('reset_counter_topic'),
+                'allow_send_vio':
+                    ParameterValue(LaunchConfiguration('allow_send_vio'), value_type=bool),
+                'watchdog_rate_hz':
+                    ParameterValue(LaunchConfiguration('watchdog_rate_hz'), value_type=float),
+                'data_timeout_sec':
+                    ParameterValue(LaunchConfiguration('data_timeout_sec'), value_type=float),
+                'max_measurement_age_sec':
+                    ParameterValue(LaunchConfiguration('max_measurement_age_sec'), value_type=float),
             }],
-            arguments=['--ros-args', '--log-level', 'info']
+            arguments=['--ros-args', '--log-level', 'info'],
         )
     ])

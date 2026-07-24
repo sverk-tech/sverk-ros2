@@ -14,10 +14,9 @@ find_package(rclcpp REQUIRED)
 find_package(px4_ros2_cpp REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
-find_package(tf2_ros REQUIRED)
 find_package(px4_ros_com REQUIRED)
 
 include_directories(
@@ -42,15 +41,31 @@ target_include_directories(pose_subscriber_tf2 PRIVATE
 ament_target_dependencies(pose_subscriber_tf2
   rclcpp
   geometry_msgs
-  tf2_ros
-  tf2_geometry_msgs
-  std_srvs
+  std_msgs
   px4_msgs
   px4_ros2_cpp
   px4_ros_com
 )
 
-install(TARGETS pose_subscriber_tf2
+# LPE по лидарной одометрии (3D-лидар + point_lio) — аналог pose_subscriber_tf2
+add_executable(lidar_odom_publisher
+  src/lidar_odom_publisher.cpp
+)
+
+target_include_directories(lidar_odom_publisher PRIVATE
+  include
+  ${EIGEN3_INCLUDE_DIR}
+)
+
+ament_target_dependencies(lidar_odom_publisher
+  rclcpp
+  nav_msgs
+  px4_msgs
+  px4_ros2_cpp
+  px4_ros_com
+)
+
+install(TARGETS pose_subscriber_tf2 lidar_odom_publisher
   DESTINATION lib/${PROJECT_NAME}
 )
 
