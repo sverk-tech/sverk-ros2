@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ros2_mcp</name>
+  <version>0.1.0</version>
+  <description>ROS2 MCP HTTP server — bridge between picoclaw and the sverk-ros2 stack</description>
+
+  <maintainer email="petayyyy@gmail.com">Petayyyy</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <!-- optional, loaded at runtime if present -->
+  <!-- exec_depend>vlm_interfaces</exec_depend -->
+  <!-- exec_depend>llm_interfaces</exec_depend -->
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
